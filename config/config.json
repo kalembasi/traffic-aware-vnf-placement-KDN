@@ -1,0 +1,15 @@
+{
+    "simulation": {
+        "end_time": 1000,
+        "lambda_rate": 0.2,
+        "min_duration": 10,
+        "max_duration": 600
+    },
+    "network": {
+        "node_cpu": 100.0,
+        "node_ram": 100.0,
+        "edge_bw": 1000.0,
+        "min_delay": 2,
+        "max_delay": 10
+    }
+}
