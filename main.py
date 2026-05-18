@@ -1,5 +1,4 @@
 import json
-import logging
 from src.utils.logger import setup_logger
 from src.topology import create_topology, visualize_topology
 from src.algorithms.greedy import GreedyPlacement
