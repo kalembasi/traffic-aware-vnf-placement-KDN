@@ -1,9 +1,15 @@
+import logging
+
 import networkx as nx
 from src.algorithms.base import BasePlacement
 from src.sfc import VNF_REQUIREMENTS, SFC_CATALOG, SFC_BANDWIDTH
 
+logger = logging.getLogger("SFCSimulation")
+
 class GreedyPlacement(BasePlacement):
     def place_sfc(self, graph, sfc_name):
+        logger.info("Initializing Greedy Placement Algorithm...")
+
         chain = SFC_CATALOG[sfc_name]
         bw_demand = SFC_BANDWIDTH[sfc_name]
         
