@@ -11,5 +11,13 @@
         "edge_bw": 1000.0,
         "min_delay": 2,
         "max_delay": 10
+    },
+    "data_generation": {
+        "end_time": 20000,
+        "profiles": [
+            {"name": "Profile 1 (Low Traffic)", "lambda_rate": 0.05, "min_duration": 10, "max_duration": 50},
+            {"name": "Profile 2 (Medium Traffic)", "lambda_rate": 0.2, "min_duration": 30, "max_duration": 150},
+            {"name": "Profile 3 (Burst Traffic)", "lambda_rate": 0.8, "min_duration": 10, "max_duration": 300}
+        ]
     }
 }

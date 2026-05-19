@@ -2,6 +2,8 @@ import json
 import simpy
 import random
 import sys
+import os
+import pandas as pd
 
 from src.topology import create_topology
 from src.engine import traffic_generator, monitor_energy
@@ -46,6 +48,7 @@ def run_isolated_simulation(algo_instance, seed=42):
     return acc_ratio, avg_latency, avg_active
 
 def main():
+    os.makedirs('results', exist_ok=True)
     print("Evaluating KDN Algorithms...")
     
     algs = {
@@ -55,15 +58,26 @@ def main():
     }
     
     results = {}
+    csv_data = []
+    
     for name, algo in algs.items():
         print(f"Running simulation for {name}...")
         acc, lat, act = run_isolated_simulation(algo)
         results[name] = {"acc": acc, "lat": lat, "act": act}
+        csv_data.append({
+            "Algorithm": name,
+            "Acceptance_Ratio": acc,
+            "Avg_Latency": lat,
+            "Avg_Active_Nodes": act
+        })
         
     print("\n| Algorithm        | Acceptance Ratio | Avg Latency | Avg Active Nodes |")
     print("|------------------|------------------|-------------|------------------|")
     for name, metrics in results.items():
         print(f"| {name.ljust(16)} | {metrics['acc']:>15.2f}% | {metrics['lat']:>11.2f} | {metrics['act']:>16.2f} |")
+        
+    pd.DataFrame(csv_data).to_csv('results/evaluation_metrics.csv', index=False)
+    print("\nEvaluation complete! Metrics saved to results/evaluation_metrics.csv")
 
 if __name__ == "__main__":
     main()

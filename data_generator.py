@@ -2,6 +2,8 @@ import json
 import random
 import copy
 import simpy
+import os
+import pandas as pd
 
 from src.topology import create_topology
 from src.sfc import SFC_CATALOG
@@ -20,7 +22,7 @@ def get_network_state(graph, max_cpu):
     
     return active_nodes, free_cpu, free_bw, max_node_utilization, bottleneck_bw
 
-def data_generation_traffic_generator(env, graph, algorithm, config, logger, max_cpu):
+def data_generation_traffic_generator(env, graph, algorithm, config, logger, max_cpu, stats):
     """Custom Data Generator mapping exactly to your ML parameters."""
     sim_cfg = config['simulation']
     lambda_rate = sim_cfg['lambda_rate']
@@ -31,6 +33,10 @@ def data_generation_traffic_generator(env, graph, algorithm, config, logger, max
         
         sfc_type = random.choice(list(SFC_CATALOG.keys()))
         duration = random.randint(sim_cfg['min_duration'], sim_cfg['max_duration'])
+        
+        stats['requests'] += 1
+        stats['durations'].append(duration)
+        stats['inter_arrivals'].append(inter_arrival)
         
         # Capture strictly existing state *BEFORE* attempting allocation
         active_nodes, free_cpu, free_bw, max_node_utilization, bottleneck_bw = get_network_state(graph, max_cpu)
@@ -67,32 +73,32 @@ def data_generation_traffic_generator(env, graph, algorithm, config, logger, max
             env.process(release_resources(env, graph, placements, paths_used, bw_demand, duration, DummyLogger()))
 
 
-def run_data_simulation(config, graph, algorithm, logger):
+def run_data_simulation(config, graph, algorithm, logger, stats):
     """Launch parallel sim isolated exclusively for Dataset Generation"""
     env = simpy.Environment()
     max_cpu = config['network']['node_cpu']
     
     # Initialize Generator instead of base engine generator
-    env.process(data_generation_traffic_generator(env, graph, algorithm, config, logger, max_cpu))
+    env.process(data_generation_traffic_generator(env, graph, algorithm, config, logger, max_cpu, stats))
     env.run(until=config['simulation']['end_time'])
 
 
 def main():
     print("Initializing Modular Data Generation for 6G KDN Policy Maker...")
+    os.makedirs('results', exist_ok=True)
+    
     # Load configuration
     with open('config/config.json', 'r') as f:
         base_config = json.load(f)
         
-    base_config['simulation']['end_time'] = 20000 # Enforce target config
+    data_gen_config = base_config.get('data_generation', {})
+    base_config['simulation']['end_time'] = data_gen_config.get('end_time', 20000)
     
     # Target Profiles (Domain Randomization)
-    profiles = [
-        {"name": "Profile 1 (Low Traffic)", "lambda_rate": 0.05, "min_duration": 10, "max_duration": 50},
-        {"name": "Profile 2 (Medium Traffic)", "lambda_rate": 0.2, "min_duration": 30, "max_duration": 150},
-        {"name": "Profile 3 (Burst Traffic)", "lambda_rate": 0.8, "min_duration": 10, "max_duration": 300},
-    ]
+    profiles = data_gen_config.get('profiles', [])
     
     telemetry_logger = TelemetryLogger('telemetry_data.csv')
+    distribution_stats = []
     
     for p in profiles:
         print(f"Running iteration: {p['name']}...")
@@ -105,9 +111,22 @@ def main():
         graph = create_topology(config)
         algo = RandomPlacement()
         
-        run_data_simulation(config, graph, algo, telemetry_logger)
+        stats = {'requests': 0, 'durations': [], 'inter_arrivals': []}
+        run_data_simulation(config, graph, algo, telemetry_logger, stats)
         
+        avg_inter_arrival = sum(stats['inter_arrivals']) / len(stats['inter_arrivals']) if stats['inter_arrivals'] else 0
+        avg_duration = sum(stats['durations']) / len(stats['durations']) if stats['durations'] else 0
+        
+        distribution_stats.append({
+            'Profile': p['name'],
+            'Requests': stats['requests'],
+            'Avg_Inter_Arrival': avg_inter_arrival,
+            'Avg_Duration': avg_duration
+        })
+        
+    pd.DataFrame(distribution_stats).to_csv('results/traffic_distributions.csv', index=False)
     print("Modular data generation complete! Dataset successfully saved to telemetry_data.csv")
+    print("Traffic distribution saved to results/traffic_distributions.csv")
 
 
 if __name__ == "__main__":
