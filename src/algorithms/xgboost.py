@@ -44,7 +44,7 @@ class XGBoostPlacement(BasePlacement):
         # --- Candidate Generation ---
         # A full exact-hardware permutation search is O(N!), we map greedy-like candidates as proposals.
         valid_candidates = []
-        for _ in range(5):  # Sample 5 different routing strategies locally 
+        for candidate_idx in range(5):  # Sample 5 different routing strategies locally 
             temp_graph = graph.copy()
             placements, paths_used, total_delay = [], [], 0
             prev_node = None
@@ -55,9 +55,15 @@ class XGBoostPlacement(BasePlacement):
                 req_ram = VNF_REQUIREMENTS[vnf]['ram']
                 placed = False
                 
-                # Shuffle node traversal to create diverse candidates
                 nodes = list(temp_graph.nodes())
-                random.shuffle(nodes)
+                if candidate_idx == 0:
+                    # Candidate 0: The Smart Candidate - Prioritize co-location
+                    if prev_node is not None and prev_node in nodes:
+                        nodes.remove(prev_node)
+                        nodes.insert(0, prev_node)
+                else:
+                    # Candidates 1-4: The Explorers - Shuffle node traversal
+                    random.shuffle(nodes)
                 
                 for node in nodes:
                     if temp_graph.nodes[node]['cpu_capacity'] >= req_cpu and temp_graph.nodes[node]['ram_capacity'] >= req_ram:
