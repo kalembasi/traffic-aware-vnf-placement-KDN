@@ -20,14 +20,16 @@ class XGBoostPlacement(BasePlacement):
         active_nodes = sum(1 for n in graph.nodes() if graph.nodes[n]['cpu_capacity'] < max_cpu)
         free_cpu = sum(graph.nodes[n]['cpu_capacity'] for n in graph.nodes())
         free_bw = sum(graph[u][v]['bandwidth'] for u, v in graph.edges())
-        return active_nodes, free_cpu, free_bw
+        max_node_utilization = max([((max_cpu - graph.nodes[n]['cpu_capacity']) / max_cpu) * 100 for n in graph.nodes()]) if graph.nodes() else 0
+        bottleneck_bw = min([graph[u][v]['bandwidth'] for u, v in graph.edges()]) if graph.edges() else 0
+        return active_nodes, free_cpu, free_bw, max_node_utilization, bottleneck_bw
 
     def place_sfc(self, graph, sfc_name):
         chain = SFC_CATALOG[sfc_name]
         bw_demand = SFC_BANDWIDTH[sfc_name]
         
         # Capture strictly current graph baseline
-        active_nodes, free_cpu, free_bw = self._get_network_state(graph)
+        active_nodes, free_cpu, free_bw, max_node_utilization, bottleneck_bw = self._get_network_state(graph)
         sfc_type_encoded = self.encoder.transform([sfc_name])[0]
         
         # --- Candidate Generation ---
@@ -88,8 +90,10 @@ class XGBoostPlacement(BasePlacement):
             
             if placed_chain:
                 unique_n = len(set([p[0] for p in placements]))
+                action_max_path_distance = max([len(p) for p in paths_used]) if paths_used else 0
                 valid_candidates.append({
                     'action_num_unique_nodes': unique_n,
+                    'action_max_path_distance': action_max_path_distance,
                     'placements': placements,
                     'paths_used': paths_used,
                     'total_delay': total_delay
@@ -105,7 +109,7 @@ class XGBoostPlacement(BasePlacement):
         # Score each valid proposed chain topology with the ML model
         for c in valid_candidates:
             # Recreate exact ML Array dimensions
-            features = [[sfc_type_encoded, active_nodes, free_cpu, free_bw, c['action_num_unique_nodes']]]
+            features = [[sfc_type_encoded, active_nodes, free_cpu, free_bw, max_node_utilization, bottleneck_bw, c['action_max_path_distance'], c['action_num_unique_nodes']]]
             pred_penalty = self.model.predict(features)[0]
             
             # Agent Policy: Pick the action with the lowest expected Latency

@@ -14,7 +14,11 @@ def get_network_state(graph, max_cpu):
     active_nodes = sum(1 for n in graph.nodes() if graph.nodes[n]['cpu_capacity'] < max_cpu)
     free_cpu = sum(graph.nodes[n]['cpu_capacity'] for n in graph.nodes())
     free_bw = sum(graph[u][v]['bandwidth'] for u, v in graph.edges())
-    return active_nodes, free_cpu, free_bw
+    
+    max_node_utilization = max([((max_cpu - graph.nodes[n]['cpu_capacity']) / max_cpu) * 100 for n in graph.nodes()]) if graph.nodes() else 0
+    bottleneck_bw = min([graph[u][v]['bandwidth'] for u, v in graph.edges()]) if graph.edges() else 0
+    
+    return active_nodes, free_cpu, free_bw, max_node_utilization, bottleneck_bw
 
 def data_generation_traffic_generator(env, graph, algorithm, config, logger, max_cpu):
     """Custom Data Generator mapping exactly to your ML parameters."""
@@ -29,7 +33,7 @@ def data_generation_traffic_generator(env, graph, algorithm, config, logger, max
         duration = random.randint(sim_cfg['min_duration'], sim_cfg['max_duration'])
         
         # Capture strictly existing state *BEFORE* attempting allocation
-        active_nodes, free_cpu, free_bw = get_network_state(graph, max_cpu)
+        active_nodes, free_cpu, free_bw, max_node_utilization, bottleneck_bw = get_network_state(graph, max_cpu)
         
         res = algorithm.place_sfc(graph, sfc_type)
         if len(res) == 2: # Gracefully checks structure
@@ -42,6 +46,7 @@ def data_generation_traffic_generator(env, graph, algorithm, config, logger, max
             
         unique_nodes = len(set([p[0] for p in placements])) if success else 0
         accepted_int = 1 if success else 0
+        action_max_path_distance = max([len(p) for p in paths_used]) if success and paths_used else 0
         
         # Dump Telemetry iteration locally
         logger.log(
@@ -50,6 +55,9 @@ def data_generation_traffic_generator(env, graph, algorithm, config, logger, max
             net_active_nodes=active_nodes,
             net_free_cpu=free_cpu,
             net_free_bw=free_bw,
+            net_max_node_utilization=max_node_utilization,
+            net_bottleneck_bw=bottleneck_bw,
+            action_max_path_distance=action_max_path_distance,
             unique_nodes=unique_nodes,
             accepted=accepted_int,
             latency=total_delay
