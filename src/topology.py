@@ -3,6 +3,22 @@ import random
 import matplotlib.pyplot as plt
 
 def create_topology(config):
+    """Creates Abilene network topology based on the provided configuration.
+    The topology consists of 12 nodes representing major cities and edges representing connections between them.
+    Each node has attributes for CPU and RAM capacity, while each edge has attributes for bandwidth and 
+    delay. The delay is randomly assigned within a specified range from the configuration.
+
+    Args:
+        config (dict): A dictionary containing network configuration parameters, including:
+            - node_cpu (int): CPU capacity for each node.
+            - node_ram (int): RAM capacity for each node.
+            - edge_bw (int): Bandwidth for each edge.
+            - min_delay (int): Minimum delay for edges.
+            - max_delay (int): Maximum delay for edges.
+    Returns:
+        networkx.Graph: A graph representing the Abilene network topology with nodes and edges configured 
+        according to the provided parameters. 
+    """
     G = nx.Graph()
     nodes = ['ATLA', 'CHIC', 'DALL', 'DNVR', 'HSTN', 'KANS', 'LOSA', 'NYCG', 'SNVA', 'SEAT', 'WASH', 'INDI']
     edges = [

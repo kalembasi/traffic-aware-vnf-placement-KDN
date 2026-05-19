@@ -75,7 +75,7 @@ def main():
     with open('config/config.json', 'r') as f:
         base_config = json.load(f)
         
-    base_config['simulation']['end_time'] = 2000 # Enforce target config
+    base_config['simulation']['end_time'] = 20000 # Enforce target config
     
     # Target Profiles (Domain Randomization)
     profiles = [
