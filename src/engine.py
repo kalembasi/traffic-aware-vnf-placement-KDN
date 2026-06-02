@@ -34,17 +34,25 @@ def release_resources(env, graph, placements, paths_used, bw_demand, duration, l
         for u, v in edges:
             graph[u][v]['bandwidth'] += bw_demand
 
-def traffic_generator(env, graph, metrics, algorithm, config, logger):
+def traffic_generator(env, graph, metrics, algorithm, config, logger, schedule=None):
     sim_cfg = config['simulation']
     lambda_rate = sim_cfg['lambda_rate']
-    
+    schedule_iter = iter(schedule) if schedule is not None else None
+
     while True:
-        inter_arrival = random.expovariate(lambda_rate)
+        if schedule_iter is not None:
+            event = next(schedule_iter, None)
+            if event is None:
+                return
+            inter_arrival, sfc_type, duration = event
+        else:
+            inter_arrival = random.expovariate(lambda_rate)
+            sfc_type = random.choice(list(SFC_CATALOG.keys()))
+            duration = random.randint(sim_cfg['min_duration'], sim_cfg['max_duration'])
+
         yield env.timeout(inter_arrival)
         
         metrics.total_requests += 1
-        sfc_type = random.choice(list(SFC_CATALOG.keys()))
-        duration = random.randint(sim_cfg['min_duration'], sim_cfg['max_duration'])
         
         # update tuple to matched returned
         res = algorithm.place_sfc(graph, sfc_type)

@@ -140,3 +140,172 @@ class XGBoostPlacement(BasePlacement):
                 graph[u][v]['bandwidth'] -= bw_demand
 
         return True, best_candidate['placements'], best_candidate['paths_used'], best_candidate['total_delay'], bw_demand
+
+
+# ---------------------------------------------------------------------------
+# Standalone training function
+# ---------------------------------------------------------------------------
+
+def train_models(data_path='telemetry_data.csv',
+                 models_dir='models',
+                 plots_dir='results/training_plots'):
+    """Train the XGBoost classifier and regressor from telemetry data.
+
+    Saves to:
+      <models_dir>/kdn_classifier.json
+      <models_dir>/kdn_regressor.json
+      <models_dir>/label_encoder.pkl
+      <plots_dir>/feature_distributions.png
+      <plots_dir>/classifier_feature_importance.png
+      <plots_dir>/classifier_confusion_matrix.png
+      <plots_dir>/regressor_feature_importance.png
+      <plots_dir>/regressor_actual_vs_predicted.png
+
+    Returns:
+      (classifier, regressor, encoder)
+    """
+    import os
+    import pickle as _pickle
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import LabelEncoder
+    from sklearn.metrics import (accuracy_score, f1_score,
+                                 mean_squared_error,
+                                 confusion_matrix, ConfusionMatrixDisplay)
+
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(plots_dir, exist_ok=True)
+
+    # --- 1. Load data ---
+    print(f"Loading data from '{data_path}' ...")
+    df = pd.read_csv(data_path)
+    print(f"  {len(df)} rows loaded.")
+
+    # --- 2. Encode categorical feature ---
+    encoder = LabelEncoder()
+    df['sfc_type_encoded'] = encoder.fit_transform(df['sfc_type'])
+    encoder_path = os.path.join(models_dir, 'label_encoder.pkl')
+    with open(encoder_path, 'wb') as f:
+        _pickle.dump(encoder, f)
+    print(f"  Encoder saved -> {encoder_path}")
+
+    # --- 3. Define features ---
+    state_features = [
+        'sfc_type_encoded', 'network_active_nodes', 'network_free_cpu',
+        'network_free_bw', 'net_max_node_utilization', 'net_bottleneck_bw'
+    ]
+    action_features = ['action_max_path_distance', 'action_num_unique_nodes']
+
+    X_cls = df[state_features]
+    y_cls = df['outcome_accepted']
+
+    df_accepted = df[df['outcome_accepted'] == 1].copy()
+    X_reg = df_accepted[state_features + action_features]
+    y_reg = df_accepted['outcome_latency']
+
+    print(f"  Classifier samples : {len(X_cls)}")
+    print(f"  Regressor samples  : {len(X_reg)}  (accepted only)")
+
+    # --- 4. Feature distribution plot ---
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    axes[0].hist(df['network_free_cpu'], bins=30, alpha=0.7, label='network_free_cpu')
+    axes[0].hist(df['network_free_bw'], bins=30, alpha=0.7, label='network_free_bw')
+    axes[0].set_title('Distribution of Free CPU and Bandwidth')
+    axes[0].set_xlabel('Value')
+    axes[0].set_ylabel('Frequency')
+    axes[0].legend()
+    axes[1].hist(df['net_max_node_utilization'], bins=30, alpha=0.7, label='net_max_node_utilization')
+    axes[1].hist(df['net_bottleneck_bw'], bins=30, alpha=0.7, label='net_bottleneck_bw')
+    axes[1].set_title('Distribution of Max Node Utilization and Bottleneck BW')
+    axes[1].set_xlabel('Value')
+    axes[1].set_ylabel('Frequency')
+    axes[1].legend()
+    plt.tight_layout()
+    p = os.path.join(plots_dir, 'feature_distributions.png')
+    plt.savefig(p, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved -> {p}")
+
+    # --- 5. Train classifier ---
+    print("\nTraining Model A: Admission Control (XGBClassifier) ...")
+    X_train_c, X_test_c, y_train_c, y_test_c = train_test_split(
+        X_cls, y_cls, test_size=0.2, random_state=42)
+    classifier = xgb.XGBClassifier(
+        objective='binary:logistic', n_estimators=150, max_depth=5, learning_rate=0.1)
+    classifier.fit(X_train_c, y_train_c)
+    preds_c = classifier.predict(X_test_c)
+    print(f"  Accuracy : {accuracy_score(y_test_c, preds_c):.4f}")
+    print(f"  F1-Score : {f1_score(y_test_c, preds_c):.4f}")
+
+    # --- 6. Classifier feature importance ---
+    fig, ax = plt.subplots(figsize=(8, 5))
+    xgb.plot_importance(classifier, max_num_features=10, ax=ax)
+    ax.set_title('Feature Importance - Admission Control (Classifier)')
+    plt.tight_layout()
+    p = os.path.join(plots_dir, 'classifier_feature_importance.png')
+    plt.savefig(p, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved -> {p}")
+
+    # --- 7. Confusion matrix ---
+    cm = confusion_matrix(y_test_c, preds_c)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classifier.classes_)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    disp.plot(cmap=plt.cm.Blues, ax=ax)
+    ax.set_title('Confusion Matrix - Admission Control (Classifier)')
+    plt.tight_layout()
+    p = os.path.join(plots_dir, 'classifier_confusion_matrix.png')
+    plt.savefig(p, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved -> {p}")
+
+    # --- 8. Train regressor ---
+    print("\nTraining Model B: Latency Optimizer (XGBRegressor) ...")
+    X_train_r, X_test_r, y_train_r, y_test_r = train_test_split(
+        X_reg, y_reg, test_size=0.2, random_state=42)
+    regressor = xgb.XGBRegressor(
+        objective='reg:squarederror', n_estimators=150, max_depth=5, learning_rate=0.1)
+    regressor.fit(X_train_r, y_train_r)
+    preds_r = regressor.predict(X_test_r)
+    rmse = np.sqrt(mean_squared_error(y_test_r, preds_r))
+    print(f"  RMSE : {rmse:.2f}")
+
+    # --- 9. Regressor feature importance ---
+    fig, ax = plt.subplots(figsize=(8, 5))
+    xgb.plot_importance(regressor, max_num_features=10, ax=ax)
+    ax.set_title('Feature Importance - Latency Optimizer (Regressor)')
+    plt.tight_layout()
+    p = os.path.join(plots_dir, 'regressor_feature_importance.png')
+    plt.savefig(p, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved -> {p}")
+
+    # --- 10. Actual vs predicted ---
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.scatter(y_test_r, preds_r, alpha=0.7)
+    ax.plot([y_test_r.min(), y_test_r.max()],
+            [y_test_r.min(), y_test_r.max()], 'r--')
+    ax.set_title('Actual vs Predicted Latency - Latency Optimizer (Regressor)')
+    ax.set_xlabel('Actual Latency (ms)')
+    ax.set_ylabel('Predicted Latency (ms)')
+    plt.tight_layout()
+    p = os.path.join(plots_dir, 'regressor_actual_vs_predicted.png')
+    plt.savefig(p, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"  Saved -> {p}")
+
+    # --- 11. Save models ---
+    cls_path = os.path.join(models_dir, 'kdn_classifier.json')
+    reg_path = os.path.join(models_dir, 'kdn_regressor.json')
+    classifier.save_model(cls_path)
+    regressor.save_model(reg_path)
+    print(f"\n  Saved Gatekeeper -> {cls_path}")
+    print(f"  Saved Optimizer  -> {reg_path}")
+    print("\nTraining complete.")
+    return classifier, regressor, encoder
+
+
+if __name__ == '__main__':
+    train_models()

@@ -8,7 +8,7 @@ import pandas as pd
 from src.topology import create_topology
 from src.sfc import SFC_CATALOG
 from src.engine import release_resources
-from src.algorithms.random import RandomPlacement
+from src.algorithms.greedy import GreedyPlacement
 from src.utils.telemetry import TelemetryLogger, DummyLogger
 
 def get_network_state(graph, max_cpu):
@@ -109,7 +109,7 @@ def main():
         
         # Instantiate dependencies cleanly per iteration
         graph = create_topology(config)
-        algo = RandomPlacement()
+        algo = GreedyPlacement()
         
         stats = {'requests': 0, 'durations': [], 'inter_arrivals': []}
         run_data_simulation(config, graph, algo, telemetry_logger, stats)

@@ -3,6 +3,7 @@ from src.utils.logger import setup_logger
 from src.topology import create_topology, visualize_topology
 from src.algorithms.greedy import GreedyPlacement
 from src.algorithms.smart import SmartPlacement
+from src.algorithms.xgboost import XGBoostPlacement
 from src.engine import run_simulation
 
 def main():
@@ -20,11 +21,12 @@ def main():
     
     # 3: Initialize Algorithm
     # greedy_algo = GreedyPlacement()
-    smart_algo = SmartPlacement()
-    
+    # smart_algo = SmartPlacement()
+    xgboost_algo = XGBoostPlacement()
+
     # 4/5: Run Event Simulation Framework
     # run_simulation(config, graph, greedy_algo, logger)
-    run_simulation(config, graph, smart_algo, logger)
+    run_simulation(config, graph, xgboost_algo, logger)
 
 if __name__ == '__main__':
     main()
