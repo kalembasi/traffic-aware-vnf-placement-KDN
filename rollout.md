@@ -154,22 +154,23 @@ sorulacak.
 
 ## 3. Fazlar ve Subtask'lar
 
-> Her faz ayrı commit(ler). Faz sonunda kısa bir "çıktı / kabul kriteri" kontrolü yapılır.
+> İş akışı: her faz `seminar-paper`'dan açılan ayrı bir branch'te yapılır, merge öncesi özet onayı alınır. Her faz ayrı commit(ler). Faz sonunda kısa bir "çıktı / kabul kriteri" kontrolü yapılır.
 
 ### Faz 0 — Hijyen ve dondurma
 - [x] `seminar-paper` branch'ini aç
 - [x] `rollout.md` (bu dosya)
-- [ ] `main@8ea6f2e` için `v1-course-report` tag'i at (ders raporunun kod hali)
-- [ ] README'yi UTF-8'e çevir, "Master's Thesis" ifadesini düzelt
-- [ ] `.gitignore`: `paper*` deseni nedeniyle makale klasörü `manuscript/` olacak. `report.pdf` repoya alınacak mı, karar ver.
-- [ ] Python sürümünü sabitle (`requirements.txt` + `python_requires`; şu an sistemde 3.14, notebook 3.10). `seaborn` ve `scipy` eksik.
+- [x] `main@8ea6f2e` için `v1-course-report` tag'i at (ders raporunun kod hali, şimdilik lokal)
+- [x] README'yi UTF-8'e çevir, "Master's Thesis" ifadesini düzelt, tekrar üretim talimatlarını ekle
+- [x] `.gitignore`: `.venv/`, `data/` ve `models/` yok sayılıyor; `results/` altındaki özet tablolar (csv/md) takip ediliyor, ham loglar edilmiyor. `__pycache__` repodan çıkarıldı. Makale klasörü `manuscript/` olacak (`paper*` deseni yüzünden).
+- [ ] `report.pdf` repoya alınacak mı? (şu an untracked)
+- [x] Python 3.14'e uygun pinler (`numpy==2.2.6`'nın 3.14 için wheel'i yok, bu yüzden güncellendi); `seaborn` ve `pytest` eklendi. v1 sonuçları yeni sürümlerle de birebir aynı.
 
 ### Faz 1 — v1'i tekrar üretilebilir hale getir (davranış değişikliği yok)
-- [ ] `evaluate_models.py` giriş noktasını düzelt (1.3-a)
-- [ ] `data_generator.py`'a seed parametresi ekle (1.3-b)
-- [ ] Tek komutla `generate → train → evaluate` (Makefile veya `run_all.sh`)
-- [ ] v1 sonuçlarını `results/v1/` altına CSV olarak üret. Kabul kriteri: Greedy/Smart, Tablo III ile birebir aynı; XGB ±1 ms içinde.
-- [ ] Kabul kriteri: temiz bir klondan tek komutla aynı CSV'ler çıkıyor.
+- [x] `evaluate_models.py` giriş noktasını düzelt (1.3-a); `--out-dir` ve `--verbose` eklendi
+- [x] `data_generator.py`'a seed parametresi ekle (1.3-b): `--seed`, `--out`, `--stats-out`
+- [x] Tek komutla `generate → train → evaluate`: `./run_all.sh` (~20 sn)
+- [x] v1 sonuçlarını `results/v1/` altına CSV olarak üret. Greedy 54.62±6.00 % / 20.52±4.73 ms ve Smart 53.39±7.03 % / 8.56±2.02 ms, Tablo III ile birebir aynı. XGB 54.44 % / 12.68 ms (rapor: 54.08 % / 12.72 ms).
+- [x] Kabul kriteri: `models/`, `data/` ve `results/v1` silinip yeniden koşulduğunda `evaluation_summary.csv` bit düzeyinde aynı çıkıyor.
 
 ### Faz 2 — Refactor (davranışı koruyan)
 - [ ] `src/placement/core.py`: ortak `try_place_vnf`, `route`, `commit`, `rollback` ve tipli bir `PlacementResult` dataclass'ı (tuple ve `len(res)==2` yamaları kalkacak)
@@ -250,8 +251,8 @@ sorulacak.
 
 | # | Karar | Öneri | Durum |
 |---|---|---|---|
-| D1 | Teslim tarihi ve sayfa limiti | — | ❓ öğrenilecek |
-| D2 | Faz 4 kapsamı: 4A mı, 4A+4B mi, yoksa sadece Faz 3 (dürüst yeniden değerlendirme)? | 4A (zaman kalırsa 4B) | ❓ |
+| D1 | Teslim tarihi ve sayfa limiti | — | ✅ 24 Kasım 23:00; 4–8 sayfa IEEE conf |
+| D2 | Faz 4 kapsamı: 4A mı, 4A+4B mi, yoksa sadece Faz 3 (dürüst yeniden değerlendirme)? | 4A (zaman kalırsa 4B) | ✅ Faz 4 dahil, sonuna kadar; gain çıkmazsa tartışılacak |
 | D3 | Topoloji gecikmeleri: sabit seed ile rastgele mi, coğrafi mesafeden mi? | coğrafi (SNDlib koordinatları) | ❓ |
 | D4 | İkinci topoloji (GÉANT) eklensin mi? | Faz 4 bitince, zaman kalırsa | ❓ |
 | D5 | AI-araç kullanım beyanı ve önceki projeden türetme beyanı | Danışmana sor | ❓ |
@@ -264,3 +265,4 @@ sorulacak.
 | Tarih | Faz | Not |
 |---|---|---|
 | 2026-11-19 | 0 | Kod ve rapor incelendi, v1 tekrar üretildi, ablasyon ön deneyi yapıldı, rollout planı yazıldı. |
+| 2026-11-19 | 0–1 | `faz-01-reproducibility` branch'i: hijyen, seed ve CLI eklendi, `run_all.sh` yazıldı, v1 sonuçları `results/v1/` altında. Teslim tarihi: **24 Kasım 23:00** (D1); kapsam Faz 4 dahil (D2). |
