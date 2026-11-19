@@ -9,7 +9,7 @@
 
 ## ▶ GÜNCEL DURUM (2026-11-19 gece) — yeni chat buradan başlasın
 
-**Branch:** `faz-4c-v3` (üstünde `faz-4-v2` var; ikisi de `seminar-paper`'a henüz merge edilmedi, push yok).
+**Branch:** `seminar-paper` (`faz-4-v2` + `faz-4c-v3` merge edildi, `839a9fe`). **Push bekliyor** (bu ortamda GitHub kimlik bilgisi yok): `git push origin seminar-paper faz-4-v2 faz-4c-v3`. Yeni iş için `seminar-paper`'dan yeni branch aç.
 **Teslim:** 24 Kasım 23:00. **Sunum:** ~15 dk. **Kullanıcı tercihi:** her şeyi kısa ve sade anlat (ML mühendisi
 çerçevesi: veri → model → ne tahmin ediyor → metrik neden böyle → gerçek hayatta ne değişir). Yeni varyant/formül ekleme.
 
@@ -42,7 +42,7 @@ bulgular `results/v3_findings.md` (§7 = v3.1); kod `scripts/v3.py` (`run`, `ana
 **Sıradaki adımlar:**
 1. Tek sonuç grafiği: x = ağ yükü (λ), y = ortalama gecikme; çizgiler: smart-load, kdn3 (adaylar), kdn3-greedy,
    oracle-greedy; σ=0 / 0.5 / 1 için 3 panel. `scripts/make_figures.py`'a eklenecek.
-2. `faz-4-v2` ve `faz-4c-v3`'ü `seminar-paper`'a merge (kullanıcı onayıyla).
+2. ~~Merge~~ ✅ yapıldı; push kullanıcıda.
 3. Faz 5: makale (aşağıdaki plan v3'e göre sadeleştirilecek: v1/gatekeeper bölümleri yok).
 4. Sunum slaytları (önerilen akış: problem → kurulum (yukarıdaki paragraf) → tek grafik → dürüst kısım: R² neden 0.99,
    ağır yükte neden kaybediyoruz).
@@ -244,7 +244,7 @@ Detaylı bulgular (İngilizce, makaleye taşınabilir): [`results/v1_findings.md
   - **F3:** Gatekeeper'ın kabul "kazancı" sayım artefaktı. Büyük SFC'leri (Video) reddederek sayıyı artırıyor; CPU ağırlıklı kabulde ise gatekeeper'ı kapatmak daha iyi.
   - **F4:** Gatekeeper ile logistic regresyon neredeyse eşit. Regressor'ın kararlarını pratikte iki aksiyon özelliği belirliyor (sadece bunlarla doğrusal model R² 0.76). Rapordaki "network_free_bw en önemli özellik" yorumu `weight` metriğinden kaynaklanan bir yanılgıydı.
 
-### Faz 4 — Yöntem iyileştirmesi: trace-driven v2 ✅ (merge onayı bekliyor)
+### Faz 4 — Yöntem iyileştirmesi: trace-driven v2 ✅ (merge edildi)
 Ön kayıt: [`experiments/v2_protocol.md`](experiments/v2_protocol.md) (commit `48e6edb`, KDN-v2 eğitilmeden önce). Bulgular: [`results/v2_findings.md`](results/v2_findings.md)
 - [x] Public veri: SNDlib Abilene topolojisi ve 5 dk trafik matrisleri (Zhang 2004), KDN VNF CPU ölçümleri (Snort/Firewall/OVS); `scripts/fetch_data.sh` SHA256 doğrulamalı
 - [x] Topoloji SNDlib ile birebir (v1'deki "Abilene benzeri" topoloji düzeltildi); gecikme coğrafi (5 µs/km); gecikme ağırlıklı yönlendirme
@@ -262,7 +262,7 @@ Detaylı bulgular (İngilizce, makaleye taşınabilir): [`results/v1_findings.md
   - **Duyarlılık:** λ=0.2 sonucu tüm varyantlarda aynı.
 - [ ] Opsiyonel 4B (kapalı döngü), GÉANT: zaman kalırsa (keşif amaçlı)
 
-### Faz 4C — v3: düğüm hızı heterojenliği, formülü bilen baseline'lar, cezasız heuristic ✅ (merge onayı bekliyor)
+### Faz 4C — v3: düğüm hızı heterojenliği, formülü bilen baseline'lar, cezasız heuristic ✅ (merge edildi)
 Ön kayıt: [`experiments/v3_protocol.md`](experiments/v3_protocol.md) (commit `82229de`, veri üretilmeden önce). Bulgular: [`results/v3_findings.md`](results/v3_findings.md)
 - [x] Uyandırma cezası kaldırıldı (smart ve aday üreticileri); gatekeeper çıkarıldı
 - [x] Gizli düğüm hız faktörü κ_n, σ ∈ {0, 0.25, 0.5, 1}; duyarlılık: doğrusal gecikme (S1), farklı permütasyon (S2)
