@@ -1,0 +1,10 @@
+{
+  "decisions": 8263,
+  "decisions_with_distinct_candidate_latencies": 7920,
+  "share_distinct": 0.9584896526685224,
+  "picked_true_min_all": 0.8259711969018516,
+  "picked_true_min_when_distinct": 0.8184343434343434,
+  "mean_regret_ms_all": 1.5794505627496067,
+  "mean_regret_ms_when_distinct": 1.6478535353535353,
+  "median_spearman_pred_vs_true_when_distinct": 0.8944271909999159
+}

@@ -185,32 +185,40 @@ yeniden üretilecek. AI-araç kullanım beyanı ders politikasına göre belirle
   - [x] regresyon: greedy, smart **ve kdn**, orijinal v1 koduyla tohum bazında birebir aynı (`tests/fixtures/v1_course_report_runs.csv`)
 - [x] Kabul kriteri: Faz 1 tablosu refactor sonrası değişmeden üretiliyor. Ablasyon varyantları da /tmp'deki ön deneyle birebir aynı.
 
-### Faz 3 — Dürüst değerlendirme protokolü (v1 modeli üzerinde)
-- [ ] ≥30 seed, eşleştirilmiş testler (Wilcoxon veya paired bootstrap), %95 güven aralıkları; `std` için `ddof=1`
-- [ ] Daha uzun ufuk (ör. end_time=10000) ve warm-up kesimi (ilk ~2×max_duration)
-- [ ] Yük taraması: λ ∈ {0.02, 0.05, 0.1, 0.2, 0.4} (düşük yükten aşırı yüke)
-- [ ] Ablasyonlar: Random, Greedy, Smart, Cand0-only, Cands+RandPick, Cands+Oracle, XGB(no-gate), XGB(full)
-- [ ] Metrikler: kabul oranı (genel ve SFC tipine göre), gecikme ortalama/medyan/p95, CPU/BW kullanımı, karar süresi (ms/istek); "active nodes" yük taramasında yeniden değerlendirilecek
-- [ ] Sınıflandırıcı: kronolojik veya profil bazlı bölme, precision/recall/ROC-AUC, trivial baseline'larla kıyas
-- [ ] Gatekeeper etkisi: hangi SFC tiplerini reddediyor, kabul artışı nereden geliyor (1.4-e)
-- [ ] Özellik önemi: `gain` ve SHAP; aday bazlı vs durum bazlı ayrımı
-- [ ] Kabul kriteri: 1.2'deki ön bulgular protokolle doğrulanmış (veya çürütülmüş) ve tablolaştırılmış.
+### Faz 3 — Dürüst değerlendirme protokolü (v1 modeli üzerinde) ✅
+Detaylı bulgular (İngilizce, makaleye taşınabilir): [`results/v1_findings.md`](results/v1_findings.md)
+- [x] 30 seed, eşleştirilmiş Wilcoxon testi, %95 t-CI, ddof=1 std (`experiments/v1_sweep.json`, 1200 koşu, ~75 sn)
+- [x] Ufuk 10000, warm-up 1200 (2×max_duration) atılıyor
+- [x] Yük taraması: λ ∈ {0.02, 0.05, 0.1, 0.2, 0.4} → kabul oranı %100 / 99 / 76 / 47 / 27
+- [x] Ablasyonlar: random, greedy, smart, cands-random, cands-first, cands-oracle, kdn-nogate, kdn
+- [x] Metrikler: sayıya göre kabul, **CPU ağırlıklı kabul** (yeni), SFC tipine göre kabul ve gecikme, gecikme ortalaması ve p95, aktif düğüm, karar süresi
+- [x] Sınıflandırıcı: kronolojik bölme, ROC-AUC, trivial baseline'lar (`scripts/analyze_models.py` → `results/v1_models/`)
+- [x] Gatekeeper analizi: SFC tipine göre ret oranı, Greedy'ye göre yanlış ret payı
+- [x] Özellik katkıları: SHAP (TreeSHAP `pred_contribs`) ve gain
+- [x] Karar kalitesi: regressor, gerçek en iyi adayı ne sıklıkla seçiyor ve ortalama kaç ms kaybettiriyor (regret)
+- [x] Kabul kriteri: 1.2'deki ön bulgular doğrulandı ve genişletildi:
+  - **F1:** KDN her yükte Greedy'yi yeniyor (−4…−11 ms) ama Smart'ı **hiçbir yükte** yenemiyor (+4.6…+7.5 ms, 30/30 seed).
+  - **F2:** Darboğaz seçim değil, aday kümesi. Aynı 5 aday içinden gerçek gecikmeye göre seçim (oracle) KDN'den 0.8–1.5 ms iyi, ama o da Smart'tan 3.7–6 ms kötü. Regressor kararların %82.6'sında doğru adayı seçiyor; ortalama kayıp 1.6 ms.
+  - **F3:** Gatekeeper'ın kabul "kazancı" sayım artefaktı. Büyük SFC'leri (Video) reddederek sayıyı artırıyor; CPU ağırlıklı kabulde ise gatekeeper'ı kapatmak daha iyi.
+  - **F4:** Gatekeeper ile logistic regresyon neredeyse eşit. Regressor'ın kararlarını pratikte iki aksiyon özelliği belirliyor (sadece bunlarla doğrusal model R² 0.76). Rapordaki "network_free_bw en önemli özellik" yorumu `weight` metriğinden kaynaklanan bir yanılgıydı.
 
 ### Faz 4 — Yöntem iyileştirmesi (ML'nin gerçekten değer katabileceği kurgu)
-**Önerilen (4A): Gerçekçi gecikme modeli.**
-- [ ] Her SFC isteğine ingress/egress düğümü ekle; gecikme = ingress→VNF1 + VNF'ler arası + VNFn→egress
-- [ ] VNF işleme gecikmesi: düğüm yüküne bağlı, doğrusal olmayan ve kontrolcünün bilmediği bir fonksiyon (ör. M/M/1 benzeri `d_proc = base / (1 − ρ)` + gürültü). Telemetride sadece ölçülen gecikme görünsün.
-- [ ] Yönlendirme: gecikme ağırlıklı en kısa yol (`weight='delay'`)
-- [ ] Aday bazlı özellikler: seçilen düğümlerin kullanım oranları, toplam yol gecikmesi, hop sayısı, bottleneck BW (path üzerinde)
-- [ ] Aday üretimi: k-shortest / co-location / load-balanced / random (çeşitlilik ve sayı parametrik)
-- [ ] Baseline'lar: Greedy, Smart (gecikme + wake-up), "yük bilmeyen" analitik heuristic (sadece yayılım gecikmesini bilen oracle), XGB-v2
-- [ ] Hikaye: yayılım gecikmesi bilinir ama kuyruk ve işleme gecikmesi bilinmez → KDN telemetriden öğrenir. Bu kurgu, ML'nin oracle'ı geçme imkanını meşru biçimde yaratır.
+Faz 3 çıkarımları (v1_findings "Implications"): (1) ML, kontrolcünün kapalı formda hesaplayamadığı bir şeyi öğrenmeli; (2) aday kümesi güçlü olmalı (Smart'ın kendi yerleşimi dahil); (3) ayarlanmış (tuned) yük-bilinçli bir heuristic baseline olmalı; (4) CPU ağırlıklı kabul raporlanmalı.
 
-**Opsiyonel (4B), zaman kalırsa:**
-- [ ] KDN kapalı döngü: XGB kendi kararlarının telemetrisiyle periyodik olarak yeniden eğitilsin (DAgger benzeri, 2–3 iterasyon). Greedy-bias sorunu (1.4-h) ve dağılım kayması ölçülsün.
-- [ ] Gatekeeper'ı "Greedy kabul eder mi" yerine "bu isteği kabul etmek gelecekteki blokajı artırır mı" olarak yeniden tanımla (uzun vadeli hedef)
+**4A: Gerçekçi gecikme modeli ve v2 politikası.**
+- [ ] Topoloji: sabit ve coğrafi link gecikmeleri (train ve eval aynı topoloji); SNDlib Abilene kenar listesinin doğrulanması
+- [ ] Her SFC isteğine ingress/egress düğümü; gecikme = ingress→VNF1 + VNF'ler arası + VNFn→egress + Σ işleme gecikmesi
+- [ ] VNF işleme gecikmesi düğüm yüküne bağlı ve doğrusal olmayan bir fonksiyon (M/M/1 benzeri `base/(1−ρ)` + gürültü); kontrolcü bu fonksiyonu bilmiyor, telemetride sadece ölçülen gecikme görünüyor
+- [ ] Yönlendirme gecikme ağırlıklı (`weight='delay'`)
+- [ ] Aday üreteci: Smart-v2 (yayılım gecikmesi + wake-up), load-balanced, co-location, k-shortest ve random varyantları
+- [ ] Aday bazlı özellikler: yayılım gecikmesi toplamı, hop, seçilen düğümlerin kullanım oranları (max/mean), path bottleneck BW, düğüm başına VNF sayısı
+- [ ] Baseline'lar: Greedy, Smart-v2 (yükü bilmiyor), **Smart-load(α)** (kullanım cezası; α grid search ile ayarlanmış, en iyi α raporlanacak), Oracle (gerçek gecikmeyi bilen seçici, üst sınır), KDN-v2
+- [ ] Gatekeeper: CPU ağırlıklı kabulle yeniden değerlendirilecek; fayda yoksa v2'den çıkarılıp Discussion'da anlatılacak
+- [ ] Değerlendirme: Faz 3 protokolüyle (30 seed, λ taraması, paired test)
 
-- [ ] Kabul kriteri: v2 sonuçları Faz 3 protokolüyle (≥30 seed, λ taraması, ablasyonlar) üretilmiş.
+**4B (opsiyonel):** kapalı döngü yeniden eğitim (KDN kendi telemetrisiyle, 2–3 iterasyon).
+
+- [ ] Kabul kriteri: v2 sonuçları Faz 3 protokolüyle üretilmiş ve bulgular `results/v2_findings.md` dosyasına yazılmış.
 
 ### Faz 5 — Makale (LaTeX, `manuscript/`)
 - [ ] `IEEE Conference Template Latex.zip` → `manuscript/` (IEEEtran, `\documentclass[conference,a4paper]{IEEEtran}`). `.docx` kullanılmayacak.
@@ -264,5 +272,6 @@ yeniden üretilecek. AI-araç kullanım beyanı ders politikasına göre belirle
 | Tarih | Faz | Not |
 |---|---|---|
 | 2026-11-19 | 0 | Kod ve rapor incelendi, v1 tekrar üretildi, ablasyon ön deneyi yapıldı, rollout planı yazıldı. |
+| 2026-11-19 | 3 | `faz-3-evaluation`: λ taraması, 8 algoritma × 30 seed, model analizi, CPU ağırlıklı kabul; bulgular `results/v1_findings.md`. |
 | 2026-11-19 | 2 | `faz-2-refactor`: ortak çekirdek, registry, deney koşucusu, testler; v1 tohum bazında birebir korunuyor. README gerçekten UTF-8'e çevrildi (Faz 1'de kodlama korunmuştu). Push bu ortamdan yapılamadı (GitHub kimlik bilgisi yok), kullanıcı push edecek. |
 | 2026-11-19 | 0–1 | `faz-01-reproducibility` branch'i: hijyen, seed ve CLI eklendi, `run_all.sh` yazıldı, v1 sonuçları `results/v1/` altında. Teslim tarihi: **24 Kasım 23:00** (D1); kapsam Faz 4 dahil (D2). |
