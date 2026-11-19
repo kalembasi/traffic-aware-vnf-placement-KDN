@@ -107,3 +107,49 @@ cells. Negative means kdn3 is faster.
    the oracle, by 0.7–1.9 ms at every σ. This is the v2 finding again, now without the wake-up penalty.
 4. **The gain from learning is real but confined to light load.** It grows with heterogeneity: at σ = 1, λ = 0.02,
    kdn3 is 3.1 ms faster than tuned smart-load and 2.6 ms faster than model-nom, with p95 lower by 9–11 ms.
+
+## 7. v3.1 addendum: the model builds the placement
+Addendum: [`experiments/v3_1_addendum.md`](../experiments/v3_1_addendum.md), registered in commit `fd640b6` after the
+v3 results were known and before these runs. Sources: `results/v3/<env>/runs_greedy.csv`, `summary_with_greedy.csv`,
+`results/v3/hypotheses_v31.csv|md`.
+
+kdn3-greedy places VNFs one by one on the node with the lowest propagation + predicted processing delay. It
+uses the same kdn3 model, without retraining.
+
+Mean latency (ms):
+
+| σ | Policy | λ=0.02 | 0.05 | 0.10 | 0.20 | 0.40 |
+|---|---|---|---|---|---|---|
+| 0 | smart-load | 17.89 | 21.16 | 26.03 | 28.26 | 28.02 |
+| | kdn3 (candidates) | 17.51 | 20.86 | 26.73 | 29.82 | 29.67 |
+| | **kdn3-greedy** | 17.59 | 20.91 | 25.89 | 28.43 | 28.04 |
+| 0.5 | smart-load | 18.72 | 21.97 | 26.96 | 29.27 | 28.52 |
+| | kdn3 (candidates) | 17.55 | 21.52 | 27.79 | 30.49 | 30.17 |
+| | **kdn3-greedy** | 17.12 | 21.19 | 27.00 | 29.43 | 28.69 |
+| 1 | smart-load | 21.31 | 25.10 | 30.50 | 32.27 | 30.70 |
+| | kdn3 (candidates) | 18.20 | 23.65 | 31.24 | 33.87 | 32.63 |
+| | **kdn3-greedy** | 16.82 | 22.28 | 30.35 | 33.50 | 31.76 |
+
+Hypotheses: each cell is the mean paired difference in ms; * means Holm p < 0.05 across the 20 cells.
+
+| | σ | λ=0.02 | 0.05 | 0.10 | 0.20 | 0.40 |
+|---|---|---|---|---|---|---|
+| **H5** kdn3-greedy − smart-load | 0 | −0.30* | −0.25* | −0.15 | +0.16 | +0.02 |
+| | 0.25 | −0.72* | −0.29* | +0.08 | −0.02 | +0.40* |
+| | 0.5 | −1.60* | −0.79* | +0.04 | +0.17 | +0.17 |
+| | 1 | −4.49* | −2.82* | −0.15 | +1.23* | +1.06* |
+| **H6** kdn3-greedy − kdn3 | 0 | +0.08* | +0.05 | −0.85* | −1.39* | −1.63* |
+| | 0.25 | −0.10* | −0.10 | −0.65* | −1.54* | −1.25* |
+| | 0.5 | −0.42* | −0.33* | −0.79* | −1.05* | −1.49* |
+| | 1 | −1.38* | −1.37* | −0.88* | −0.37* | −0.86* |
+
+- **H6:** building the placement beats choosing among candidates in 18 of 20 cells, by up to 1.6 ms. The two
+  exceptions are at σ = 0, light load, and both are below 0.1 ms.
+- **H5, against the tuned heuristic:**
+  - Light load: kdn3-greedy is better, and the gain grows with σ (up to −4.5 ms).
+  - Medium and heavy load: no difference up to σ = 0.5. At σ = 1, λ ≥ 0.2, it is about 1.1–1.2 ms worse.
+- **Upper bound:** kdn3-greedy ≈ oracle-greedy ≈ model-cal-greedy (±0.2 ms). The model is as good as the true
+  delay inside this search, so the remaining loss at heavy load comes from the per-request (myopic) objective,
+  not from prediction.
+- **Acceptance:** CPU-weighted acceptance of kdn3-greedy equals smart-load's (±0.3 pp). The candidate selectors'
+  +1 pp is gone.

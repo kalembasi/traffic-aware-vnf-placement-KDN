@@ -227,7 +227,7 @@ Detaylı bulgular (İngilizce, makaleye taşınabilir): [`results/v1_findings.md
 - [x] Yeni seçiciler: model-nom (formül, nominal s_v), model-cal (formül + κ̂ kalibrasyonu), kdn3 (VNF başına XGBoost)
 - [x] v2 sonuçları birebir korunuyor; 48 test
 - [x] **Sonuç (özet):** kdn3 ≈ model-cal ≈ oracle (H3: fark yok). Hafif yükte kdn3'ün kazancı σ ile büyüyor (σ=1, λ=0.02: smart-load'a göre −3.1 ms, model-nom'a göre −2.6 ms). λ ≥ 0.1'de tüm aday seçiciler eşit ve smart-load'dan 0.7–1.9 ms kötü: tavan aday kümesi + miyopluk.
-- [ ] Aday: v3.1, modeli aramanın içine koymak (açgözlü VNF başına seçim), ayrı ek ön kayıtla
+- [x] v3.1 (ek ön kayıt `fd640b6`): model yerleşimi kendisi kuruyor (kdn3-greedy). Aday listesinden seçmeye göre 20 hücrenin 18'inde daha iyi; ayarlanmış heuristic'e göre hafif yükte σ ile büyüyen kazanç (σ=1, λ=0.02: −4.5 ms), orta/ağır yükte σ≤0.5 eşit, σ=1'de ~1 ms kötü (miyopluk).
 
 ### Faz 5 — Makale (LaTeX, `manuscript/`)
 - [ ] `IEEE Conference Template Latex.zip` → `manuscript/` (IEEEtran, `\documentclass[conference,a4paper]{IEEEtran}`). `.docx` kullanılmayacak.
