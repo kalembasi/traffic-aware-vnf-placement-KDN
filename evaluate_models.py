@@ -15,6 +15,8 @@ from src.algorithms.smart import SmartPlacement
 from src.algorithms.xgboost import XGBoostPlacement
 
 EVAL_SEEDS = [42, 7, 123, 0, 99]
+OUT_DIR = 'results'  # overridden by --out-dir
+VERBOSE = False      # per-event lines to stdout (always written to the .log file)
 
 
 # ---------------------------------------------------------------------------
@@ -40,7 +42,7 @@ def _make_algo_logger(prefix: str) -> logging.Logger:
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
 
-    log_path = os.path.join('results', f'{prefix}_output.log')
+    log_path = os.path.join(OUT_DIR, f'{prefix}_output.log')
     fh = logging.FileHandler(log_path, mode='w', encoding='utf-8')
     fh.setLevel(logging.INFO)
 
@@ -52,7 +54,8 @@ def _make_algo_logger(prefix: str) -> logging.Logger:
     sh.setFormatter(fmt)
 
     logger.addHandler(fh)
-    logger.addHandler(sh)
+    if VERBOSE:
+        logger.addHandler(sh)
     return logger
 
 
@@ -126,7 +129,7 @@ def _write_md_report(prefix: str, algo_name: str, config: dict, graph, metrics: 
         "",
     ]
 
-    md_path = os.path.join('results', f'{prefix}_output.md')
+    md_path = os.path.join(OUT_DIR, f'{prefix}_output.md')
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
 
@@ -166,7 +169,7 @@ def _write_summary_md(summary_rows: list, seeds: list):
             f"| Avg Active Nodes     | {r['Act_Mean']:.2f} | {r['Act_Std']:.2f} | {r['Act_Min']:.2f} | {r['Act_Max']:.2f} |",
             "",
         ]
-    with open(os.path.join('results', 'evaluation_summary.md'), 'w', encoding='utf-8') as f:
+    with open(os.path.join(OUT_DIR, 'evaluation_summary.md'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
 
 
@@ -287,7 +290,7 @@ def run_isolated_simulation(algo_name: str, algo_instance, seed: int):
 # ---------------------------------------------------------------------------
 
 def main():
-    os.makedirs('results', exist_ok=True)
+    os.makedirs(OUT_DIR, exist_ok=True)
     print("=" * 60)
     print("Evaluating KDN Placement Algorithms")
     print(f"Seeds: {EVAL_SEEDS}  ({len(EVAL_SEEDS)} runs per algorithm)")
@@ -315,7 +318,7 @@ def main():
                 "Acceptance_Ratio": acc, "Avg_Latency": lat, "Avg_Active_Nodes": act,
             })
 
-    pd.DataFrame(per_seed_csv).to_csv('results/evaluation_metrics.csv', index=False)
+    pd.DataFrame(per_seed_csv).to_csv(os.path.join(OUT_DIR, 'evaluation_metrics.csv'), index=False)
 
     summary_rows = []
     for name, runs in results_by_algo.items():
@@ -332,7 +335,7 @@ def main():
             "Act_Min":  np.min(acts),  "Act_Max": np.max(acts),
         })
 
-    pd.DataFrame(summary_rows).to_csv('results/evaluation_summary.csv', index=False)
+    pd.DataFrame(summary_rows).to_csv(os.path.join(OUT_DIR, 'evaluation_summary.csv'), index=False)
     _write_summary_md(summary_rows, EVAL_SEEDS)
 
     print(f"\n\n{'='*60}")
@@ -346,11 +349,20 @@ def main():
         act_s = f"{r['Act_Mean']:.2f} +/- {r['Act_Std']:.2f}"
         print(f"| {r['Algorithm']:<18} | {acc_s:>25} | {lat_s:>22} | {act_s:>22} |")
 
-    print(f"\nOutput files in results/:")
+    print(f"\nOutput files in {OUT_DIR}/:")
     print(f"  evaluation_metrics.csv    (per-seed raw data, {len(EVAL_SEEDS)*len(algo_instances)} rows)")
     print(f"  evaluation_summary.csv    (mean/std/min/max per algorithm)")
     print(f"  evaluation_summary.md     (formatted summary report)")
     for name in algo_instances:
         for s in EVAL_SEEDS:
             print(f"  {name}_seed{s}_output.log / .md")
+
+
+if __name__ == '__main__':
+    import argparse
+    ap = argparse.ArgumentParser(description="Evaluate placement algorithms over fixed seeds.")
+    ap.add_argument('--out-dir', default='results')
+    ap.add_argument('--verbose', action='store_true', help='echo per-event simulation log to stdout')
+    a = ap.parse_args()
+    OUT_DIR, VERBOSE = a.out_dir, a.verbose
     main()

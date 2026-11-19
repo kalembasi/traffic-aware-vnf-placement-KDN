@@ -308,4 +308,10 @@ def train_models(data_path='telemetry_data.csv',
 
 
 if __name__ == '__main__':
-    train_models()
+    import argparse
+    ap = argparse.ArgumentParser(description="Train the two-stage KDN XGBoost models.")
+    ap.add_argument('--data', default='telemetry_data.csv')
+    ap.add_argument('--models-dir', default='models')
+    ap.add_argument('--plots-dir', default='results/training_plots')
+    a = ap.parse_args()
+    train_models(data_path=a.data, models_dir=a.models_dir, plots_dir=a.plots_dir)

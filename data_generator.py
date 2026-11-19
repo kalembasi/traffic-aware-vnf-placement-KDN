@@ -83,9 +83,14 @@ def run_data_simulation(config, graph, algorithm, logger, stats):
     env.run(until=config['simulation']['end_time'])
 
 
-def main():
+def main(seed=2025, out_path='telemetry_data.csv', stats_path='results/traffic_distributions.csv'):
     print("Initializing Modular Data Generation for 6G KDN Policy Maker...")
-    os.makedirs('results', exist_ok=True)
+    # Seed once: topology delays, arrivals, durations and SFC types all draw from this RNG
+    random.seed(seed)
+    print(f"  seed={seed}  out={out_path}")
+    for path in (out_path, stats_path):
+        if os.path.dirname(path):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
     
     # Load configuration
     with open('config/config.json', 'r') as f:
@@ -97,7 +102,7 @@ def main():
     # Target Profiles (Domain Randomization)
     profiles = data_gen_config.get('profiles', [])
     
-    telemetry_logger = TelemetryLogger('telemetry_data.csv')
+    telemetry_logger = TelemetryLogger(out_path)
     distribution_stats = []
     
     for p in profiles:
@@ -124,10 +129,16 @@ def main():
             'Avg_Duration': avg_duration
         })
         
-    pd.DataFrame(distribution_stats).to_csv('results/traffic_distributions.csv', index=False)
-    print("Modular data generation complete! Dataset successfully saved to telemetry_data.csv")
-    print("Traffic distribution saved to results/traffic_distributions.csv")
+    pd.DataFrame(distribution_stats).to_csv(stats_path, index=False)
+    print(f"Modular data generation complete! Dataset successfully saved to {out_path}")
+    print(f"Traffic distribution saved to {stats_path}")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    ap = argparse.ArgumentParser(description="Generate Greedy-labelled telemetry for KDN model training.")
+    ap.add_argument('--seed', type=int, default=2025)
+    ap.add_argument('--out', default='telemetry_data.csv')
+    ap.add_argument('--stats-out', default='results/traffic_distributions.csv')
+    a = ap.parse_args()
+    main(seed=a.seed, out_path=a.out, stats_path=a.stats_out)
