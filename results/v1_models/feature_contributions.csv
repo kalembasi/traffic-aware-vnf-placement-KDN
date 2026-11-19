@@ -1,0 +1,15 @@
+model,feature,mean_abs_shap,gain_share
+classifier,sfc_type_encoded,2.2773003578186035,0.5637028484183221
+classifier,network_active_nodes,0.0,0.0
+classifier,network_free_cpu,4.55104923248291,0.41151913347956603
+classifier,network_free_bw,0.2797854244709015,0.012614911555147225
+classifier,net_max_node_utilization,0.0,0.0
+classifier,net_bottleneck_bw,0.19272135198116302,0.012163106546964696
+regressor,sfc_type_encoded,1.3634264469146729,0.03401910212095545
+regressor,network_active_nodes,0.013384005054831505,0.009386036635357371
+regressor,network_free_cpu,0.45181113481521606,0.009978862574072704
+regressor,network_free_bw,0.7981394529342651,0.011158556577779899
+regressor,net_max_node_utilization,0.074374258518219,0.010487935556119094
+regressor,net_bottleneck_bw,0.9402214288711548,0.010842380485317066
+regressor,action_max_path_distance,13.733131408691406,0.6957543322895877
+regressor,action_num_unique_nodes,4.309159755706787,0.21837279376081076

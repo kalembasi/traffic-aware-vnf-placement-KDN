@@ -56,7 +56,7 @@ def run_grid(exp, jobs=1):
     return runs, recs
 
 
-METRICS = ['acceptance', 'lat_mean', 'lat_p95', 'active_nodes', 'decision_ms', 'gate_rejects']
+METRICS = ['acceptance', 'cpu_acceptance', 'lat_mean', 'lat_p95', 'active_nodes', 'decision_ms', 'gate_rejects']
 
 
 def summarize_runs(runs, metrics=METRICS):
@@ -89,7 +89,8 @@ def paired_tests(runs, reference, metric='lat_mean'):
             d = (p[algo] - p[reference]).dropna()
             pval = stats.wilcoxon(d).pvalue if len(d) >= 6 and np.any(d != 0) else np.nan
             rows.append({'lambda': lam, 'metric': metric, 'algorithm': algo, 'reference': reference,
-                         'mean_diff': d.mean(), 'n': len(d), 'wins': int((d < 0).sum()), 'p_wilcoxon': pval})
+                         'mean_diff': d.mean(), 'n': len(d), 'n_lower': int((d < 0).sum()),
+                         'n_higher': int((d > 0).sum()), 'p_wilcoxon': pval})
     return pd.DataFrame(rows)
 
 
@@ -97,11 +98,11 @@ def write_markdown(summary, path, title):
     lines = [f"# {title}", "", "Mean ± sample std over seeds (95% CI half-width in brackets).", ""]
     for lam, g in summary.groupby('lambda', sort=False):
         lines += [f"## lambda = {lam}", "",
-                  "| Algorithm | Seeds | Acceptance (%) | Latency mean (ms) | Latency p95 (ms) | Active nodes | Decision (ms) |",
-                  "|---|---|---|---|---|---|---|"]
+                  "| Algorithm | Seeds | Acceptance (%) | CPU-weighted acc. (%) | Latency mean (ms) | Latency p95 (ms) | Active nodes | Decision (ms) |",
+                  "|---|---|---|---|---|---|---|---|"]
         for _, r in g.iterrows():
             f = lambda m, d=2: f"{r[m + '_mean']:.{d}f} ± {r[m + '_std']:.{d}f} [{r[m + '_ci95']:.{d}f}]"
-            lines.append(f"| {r['algorithm']} | {r['n_seeds']} | {f('acceptance')} | {f('lat_mean')} | "
+            lines.append(f"| {r['algorithm']} | {r['n_seeds']} | {f('acceptance')} | {f('cpu_acceptance')} | {f('lat_mean')} | "
                          f"{f('lat_p95')} | {f('active_nodes')} | {f('decision_ms', 3)} |")
         lines.append("")
     with open(path, 'w') as fh:

@@ -14,7 +14,9 @@ import numpy as np
 import simpy
 
 from src.placement import commit, release
-from src.sfc import SFC_CATALOG, SFCRequest
+from src.sfc import SFC_CATALOG, VNF_REQUIREMENTS, SFCRequest
+
+SFC_CPU = {t: sum(VNF_REQUIREMENTS[v]['cpu'] for v in c) for t, c in SFC_CATALOG.items()}
 
 
 @dataclass
@@ -128,6 +130,9 @@ def summarize(sim: Simulation, warmup=0.0):
         'requests': len(recs),
         'accepted': len(acc),
         'acceptance': 100.0 * len(acc) / len(recs) if recs else np.nan,
+        # resource-weighted acceptance: share of requested CPU demand that was admitted
+        'cpu_acceptance': 100.0 * sum(SFC_CPU[r.sfc_type] for r in acc) / sum(SFC_CPU[r.sfc_type] for r in recs)
+        if recs else np.nan,
         'gate_rejects': sum(1 for r in recs if r.reason == 'gate'),
         'lat_mean': float(lat.mean()) if len(lat) else np.nan,
         'lat_p50': float(np.percentile(lat, 50)) if len(lat) else np.nan,

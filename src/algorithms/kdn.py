@@ -78,6 +78,7 @@ class KDNPlacement(BasePlacement):
             preds = self.regressor.predict(X)
             best = cands[int(np.argmin(preds))]
             best.info['predicted_latency'] = float(preds.min())
+            best.info['cand_preds'] = preds.tolist()
         elif self.selector == 'oracle':
             best = min(cands, key=lambda c: c.delay)
         elif self.selector == 'first':
@@ -85,4 +86,5 @@ class KDNPlacement(BasePlacement):
         else:
             best = self.rng.choice(cands)
         best.info['n_candidates'] = len(cands)
+        best.info['cand_delays'] = [c.delay for c in cands]   # diagnostics: true latency of every candidate
         return best
