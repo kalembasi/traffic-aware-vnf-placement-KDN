@@ -220,6 +220,15 @@ Detaylı bulgular (İngilizce, makaleye taşınabilir): [`results/v1_findings.md
   - **Duyarlılık:** λ=0.2 sonucu tüm varyantlarda aynı.
 - [ ] Opsiyonel 4B (kapalı döngü), GÉANT: zaman kalırsa (keşif amaçlı)
 
+### Faz 4C — v3: düğüm hızı heterojenliği, formülü bilen baseline'lar, cezasız heuristic ✅ (merge onayı bekliyor)
+Ön kayıt: [`experiments/v3_protocol.md`](experiments/v3_protocol.md) (commit `82229de`, veri üretilmeden önce). Bulgular: [`results/v3_findings.md`](results/v3_findings.md)
+- [x] Uyandırma cezası kaldırıldı (smart ve aday üreticileri); gatekeeper çıkarıldı
+- [x] Gizli düğüm hız faktörü κ_n, σ ∈ {0, 0.25, 0.5, 1}; duyarlılık: doğrusal gecikme (S1), farklı permütasyon (S2)
+- [x] Yeni seçiciler: model-nom (formül, nominal s_v), model-cal (formül + κ̂ kalibrasyonu), kdn3 (VNF başına XGBoost)
+- [x] v2 sonuçları birebir korunuyor; 48 test
+- [x] **Sonuç (özet):** kdn3 ≈ model-cal ≈ oracle (H3: fark yok). Hafif yükte kdn3'ün kazancı σ ile büyüyor (σ=1, λ=0.02: smart-load'a göre −3.1 ms, model-nom'a göre −2.6 ms). λ ≥ 0.1'de tüm aday seçiciler eşit ve smart-load'dan 0.7–1.9 ms kötü: tavan aday kümesi + miyopluk.
+- [ ] Aday: v3.1, modeli aramanın içine koymak (açgözlü VNF başına seçim), ayrı ek ön kayıtla
+
 ### Faz 5 — Makale (LaTeX, `manuscript/`)
 - [ ] `IEEE Conference Template Latex.zip` → `manuscript/` (IEEEtran, `\documentclass[conference,a4paper]{IEEEtran}`). `.docx` kullanılmayacak.
 - [ ] Tüm şekiller `scripts/make_figures.py` ile CSV'lerden üretilsin (elle çizim yok); vektör PDF formatında, tek tip renk ve font
@@ -272,6 +281,7 @@ Detaylı bulgular (İngilizce, makaleye taşınabilir): [`results/v1_findings.md
 | Tarih | Faz | Not |
 |---|---|---|
 | 2026-11-19 | 0 | Kod ve rapor incelendi, v1 tekrar üretildi, ablasyon ön deneyi yapıldı, rollout planı yazıldı. |
+| 2026-11-19 | 4C | `faz-4c-v3`: ön kayıt (82229de), κ heterojenliği + model-nom/model-cal/kdn3; 6 ortam × 1350 koşu. Öğrenme = kalibrasyon; hafif yükte σ ile büyüyen kazanç; λ≥0.1'de aday kümesi tavanı ve miyopluk. |
 | 2026-11-19 | 4 | `faz-4-v2`: ön kayıt (48e6edb), trace-driven ortam, ana çalışma + duyarlılık + keşif ablasyonları; bulgular `results/v2_findings.md`. Karışık sonuç: düşük yükte kazanç, yüksek yükte kayıp; KDN ≈ oracle. |
 | 2026-11-19 | 3 | `faz-3-evaluation`: λ taraması, 8 algoritma × 30 seed, model analizi, CPU ağırlıklı kabul; bulgular `results/v1_findings.md`. |
 | 2026-11-19 | 2 | `faz-2-refactor`: ortak çekirdek, registry, deney koşucusu, testler; v1 tohum bazında birebir korunuyor. README gerçekten UTF-8'e çevrildi (Faz 1'de kodlama korunmuştu). Push bu ortamdan yapılamadı (GitHub kimlik bilgisi yok), kullanıcı push edecek. |
