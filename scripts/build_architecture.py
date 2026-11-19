@@ -200,7 +200,7 @@ def build():
     dec = table(['#', 'alan', 'karar', 'neden', 'alternatif / risk'], [[i + 1, a, b, c, d] for i, (a, b, c, d) in enumerate(DECISIONS)])
     qa = ''.join(f'<details><summary>{q}</summary><p>{a}</p></details>' for q, a in QA)
     ex = EX
-    rho_txt = ', '.join(f"{k.replace('ng', '')}={max(v, 0.0):.2f}" for k, v in ex['node_rho'].items())
+    rho_txt = ', '.join(f"{k.replace('ng', '')}={round(v, 2) + 0.0:.2f}" for k, v in ex['node_rho'].items())
 
     html = f"""<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mimari ve karar dokümanı: KDN tabanlı VNF yerleştirme</title>
