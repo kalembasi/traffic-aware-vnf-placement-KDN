@@ -19,7 +19,7 @@ data was generated. No deviations. Sources: `results/v3/{s0,s025,s05,s1}` (main 
 | 0.25 | 0.998 | 0.907 | 0.997 |
 | 0.5 | 0.997 | 0.699 | 0.998 |
 | 1.0 | 0.997 | 0.296 | 0.998 |
-| S1 linear, σ=0.5 | 0.999 | 0.536 | (see json) |
+| S1 linear, σ=0.5 | 0.999 | 0.536 | 0.995 |
 
 - **Calibration:** model-cal recovers κ_n exactly, and û0 = 0.5995 against a true u0 of 0.6. Given the measured
   utilisation, the delay is deterministic, so calibration is exact.
@@ -71,7 +71,7 @@ cells. Negative means kdn3 is faster.
   selectors are equal within ±0.3 ms at every σ.
 - **H3:** held. kdn3 and model-cal do not differ meaningfully (one cell significant, −0.36 ms).
 - **Trend check:** at λ = 0.02, kdn3 − model-nom is +0.01, −0.15, −0.68, −2.56 ms across σ; at λ = 0.05 it is
-  +0.01, +0.05, −0.24, −1.37 ms (monotone except the σ=0.25 step at λ=0.05, which is +0.04). At λ ≥ 0.1 there is no trend.
+  +0.01, +0.05, −0.24, −1.37 ms (monotone from σ = 0.25 on; the first step is within noise). At λ ≥ 0.1 there is no trend.
 
 ## 4. Sensitivity (σ = 0.5; Holm across the 5 λ values)
 | | variant | λ=0.02 | 0.05 | 0.10 | 0.20 | 0.40 |
