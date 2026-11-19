@@ -1,0 +1,22 @@
+{
+  "name": "v1 reproduction (course report protocol)",
+  "base_config": "config/config.json",
+  "algorithms": [
+    "greedy",
+    "smart",
+    "kdn"
+  ],
+  "seeds": [
+    42,
+    7,
+    123,
+    0,
+    99
+  ],
+  "lambdas": [
+    0.2
+  ],
+  "end_time": 1000,
+  "warmup": 0,
+  "models_dir": "models/v1"
+}

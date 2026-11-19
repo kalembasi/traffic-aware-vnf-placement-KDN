@@ -171,19 +171,19 @@ yeniden üretilecek. AI-araç kullanım beyanı ders politikasına göre belirle
 - [x] v1 sonuçlarını `results/v1/` altına CSV olarak üret. Greedy 54.62±6.00 % / 20.52±4.73 ms ve Smart 53.39±7.03 % / 8.56±2.02 ms, Tablo III ile birebir aynı. XGB 54.44 % / 12.68 ms (rapor: 54.08 % / 12.72 ms).
 - [x] Kabul kriteri: `models/`, `data/` ve `results/v1` silinip yeniden koşulduğunda `evaluation_summary.csv` bit düzeyinde aynı çıkıyor.
 
-### Faz 2 — Refactor (davranışı koruyan)
-- [ ] `src/placement/core.py`: ortak `try_place_vnf`, `route`, `commit`, `rollback` ve tipli bir `PlacementResult` dataclass'ı (tuple ve `len(res)==2` yamaları kalkacak)
-- [ ] Algoritmalar "aday üreteci + seçici" olarak yeniden yazılacak. Greedy, Smart, Random, XGB ve ablasyon varyantları (no-gate, oracle, cand0, randpick) aynı çekirdeği kullanacak.
-- [ ] `src/features.py`: tek durum/aksiyon özellik fonksiyonu (train ve serve aynı kodu kullanır); `MAX_CPU` config'den gelir
-- [ ] Topoloji: link gecikmeleri sabit seed ile ya da coğrafi mesafeden üretilsin; train ve eval aynı topolojiyi kullansın. Kenar listesi SNDlib ile doğrulansın (1.4-i).
-- [ ] `experiments/run.py`: config/YAML ile (algoritma × seed × λ) gridi, her koşu için bir CSV satırı ve istek bazlı log (opsiyonel parquet)
-- [ ] `train.py`: notebook'taki eğitim betiğe taşınsın; notebook'lar sadece görselleştirme yapsın
-- [ ] Testler (`pytest`):
-  - [ ] kaynak korunumu: simülasyon sonunda tüm kaynaklar başlangıç değerine dönüyor
-  - [ ] negatif kapasite asla oluşmuyor
-  - [ ] determinizm: aynı seed ile aynı sonuç
-  - [ ] regresyon: Greedy/Smart, Faz 1 sayılarıyla birebir aynı
-- [ ] Kabul kriteri: Faz 1 tablosu refactor sonrası değişmeden üretiliyor.
+### Faz 2 — Refactor (davranışı koruyan) ✅
+- [x] `src/placement.py`: kopyasız `ResourceState` overlay, `route`, `feasible_hosts`, `build_chain`, `commit`/`release`, tipli `PlacementResult` (tuple ve `len(res)==2` yamaları kalktı). Algoritmalar grafiği değiştirmiyor; commit ve release motorda.
+- [x] Algoritmalar "VNF başına düğüm sıralaması + seçici" olarak aynı çekirdeği kullanıyor: greedy, smart, random, kdn; ablasyonlar `kdn-nogate`, `cands-oracle`, `cands-first`, `cands-random` (`src/algorithms/__init__.py` registry).
+- [x] `src/features.py`: tek özellik kaynağı; `MAX_CPU` yerine düğümdeki `cpu_max` kullanılıyor; pickle'lı LabelEncoder yerine sabit `SFC_CODES` (aynı kodlama).
+- [ ] ~~Topoloji gecikmeleri / SNDlib doğrulaması~~ → davranış değiştirdiği için **Faz 4'e taşındı** (v2 kurgusu).
+- [x] `src/experiment.py` + `scripts/evaluate.py`: JSON ile (algoritma × seed × λ) gridi, paralel koşu (`--jobs`), `runs.csv`, `summary.csv/md` (ortalama, ddof=1 std, %95 t-CI), eşleştirilmiş Wilcoxon (`reference` alanı), istek bazlı kayıt (`save_requests`).
+- [x] `src/training.py` + `scripts/train.py`: eğitim notebook'tan betiğe taşındı; precision/recall/confusion kaydediliyor, önem grafiği `gain` ile çiziliyor. Notebook'lar, `main.py`, `evaluate_models.py`, `data_generator.py`, `src/utils` kaldırıldı (hepsi `v1-course-report` tag'inde).
+- [x] Testler (`pytest`, 30 test, ~2 sn):
+  - [x] kaynak korunumu: tüm SFC'ler bitince kapasiteler başlangıca dönüyor (8 algoritma)
+  - [x] negatif kapasite asla oluşmuyor
+  - [x] determinizm: aynı seed ile aynı sonuç
+  - [x] regresyon: greedy, smart **ve kdn**, orijinal v1 koduyla tohum bazında birebir aynı (`tests/fixtures/v1_course_report_runs.csv`)
+- [x] Kabul kriteri: Faz 1 tablosu refactor sonrası değişmeden üretiliyor. Ablasyon varyantları da /tmp'deki ön deneyle birebir aynı.
 
 ### Faz 3 — Dürüst değerlendirme protokolü (v1 modeli üzerinde)
 - [ ] ≥30 seed, eşleştirilmiş testler (Wilcoxon veya paired bootstrap), %95 güven aralıkları; `std` için `ddof=1`
@@ -264,4 +264,5 @@ yeniden üretilecek. AI-araç kullanım beyanı ders politikasına göre belirle
 | Tarih | Faz | Not |
 |---|---|---|
 | 2026-11-19 | 0 | Kod ve rapor incelendi, v1 tekrar üretildi, ablasyon ön deneyi yapıldı, rollout planı yazıldı. |
+| 2026-11-19 | 2 | `faz-2-refactor`: ortak çekirdek, registry, deney koşucusu, testler; v1 tohum bazında birebir korunuyor. README gerçekten UTF-8'e çevrildi (Faz 1'de kodlama korunmuştu). Push bu ortamdan yapılamadı (GitHub kimlik bilgisi yok), kullanıcı push edecek. |
 | 2026-11-19 | 0–1 | `faz-01-reproducibility` branch'i: hijyen, seed ve CLI eklendi, `run_all.sh` yazıldı, v1 sonuçları `results/v1/` altında. Teslim tarihi: **24 Kasım 23:00** (D1); kapsam Faz 4 dahil (D2). |
