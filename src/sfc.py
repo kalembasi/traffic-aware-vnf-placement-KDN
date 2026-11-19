@@ -38,6 +38,8 @@ class SFCRequest:
     duration: float
     src: Optional[str] = None   # ingress node (unused by the v1 latency model)
     dst: Optional[str] = None   # egress node (unused by the v1 latency model)
+    features: Optional[dict] = None  # observable traffic features (v2: packets, flows)
+    hidden: Optional[dict] = None    # ground truth hidden from policies (v2: relative VNF loads)
 
     @property
     def chain(self):

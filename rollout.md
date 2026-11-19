@@ -202,23 +202,23 @@ Detaylı bulgular (İngilizce, makaleye taşınabilir): [`results/v1_findings.md
   - **F3:** Gatekeeper'ın kabul "kazancı" sayım artefaktı. Büyük SFC'leri (Video) reddederek sayıyı artırıyor; CPU ağırlıklı kabulde ise gatekeeper'ı kapatmak daha iyi.
   - **F4:** Gatekeeper ile logistic regresyon neredeyse eşit. Regressor'ın kararlarını pratikte iki aksiyon özelliği belirliyor (sadece bunlarla doğrusal model R² 0.76). Rapordaki "network_free_bw en önemli özellik" yorumu `weight` metriğinden kaynaklanan bir yanılgıydı.
 
-### Faz 4 — Yöntem iyileştirmesi (ML'nin gerçekten değer katabileceği kurgu)
-Faz 3 çıkarımları (v1_findings "Implications"): (1) ML, kontrolcünün kapalı formda hesaplayamadığı bir şeyi öğrenmeli; (2) aday kümesi güçlü olmalı (Smart'ın kendi yerleşimi dahil); (3) ayarlanmış (tuned) yük-bilinçli bir heuristic baseline olmalı; (4) CPU ağırlıklı kabul raporlanmalı.
-
-**4A: Gerçekçi gecikme modeli ve v2 politikası.**
-- [ ] Topoloji: sabit ve coğrafi link gecikmeleri (train ve eval aynı topoloji); SNDlib Abilene kenar listesinin doğrulanması
-- [ ] Her SFC isteğine ingress/egress düğümü; gecikme = ingress→VNF1 + VNF'ler arası + VNFn→egress + Σ işleme gecikmesi
-- [ ] VNF işleme gecikmesi düğüm yüküne bağlı ve doğrusal olmayan bir fonksiyon (M/M/1 benzeri `base/(1−ρ)` + gürültü); kontrolcü bu fonksiyonu bilmiyor, telemetride sadece ölçülen gecikme görünüyor
-- [ ] Yönlendirme gecikme ağırlıklı (`weight='delay'`)
-- [ ] Aday üreteci: Smart-v2 (yayılım gecikmesi + wake-up), load-balanced, co-location, k-shortest ve random varyantları
-- [ ] Aday bazlı özellikler: yayılım gecikmesi toplamı, hop, seçilen düğümlerin kullanım oranları (max/mean), path bottleneck BW, düğüm başına VNF sayısı
-- [ ] Baseline'lar: Greedy, Smart-v2 (yükü bilmiyor), **Smart-load(α)** (kullanım cezası; α grid search ile ayarlanmış, en iyi α raporlanacak), Oracle (gerçek gecikmeyi bilen seçici, üst sınır), KDN-v2
-- [ ] Gatekeeper: CPU ağırlıklı kabulle yeniden değerlendirilecek; fayda yoksa v2'den çıkarılıp Discussion'da anlatılacak
-- [ ] Değerlendirme: Faz 3 protokolüyle (30 seed, λ taraması, paired test)
-
-**4B (opsiyonel):** kapalı döngü yeniden eğitim (KDN kendi telemetrisiyle, 2–3 iterasyon).
-
-- [ ] Kabul kriteri: v2 sonuçları Faz 3 protokolüyle üretilmiş ve bulgular `results/v2_findings.md` dosyasına yazılmış.
+### Faz 4 — Yöntem iyileştirmesi: trace-driven v2 ✅ (merge onayı bekliyor)
+Ön kayıt: [`experiments/v2_protocol.md`](experiments/v2_protocol.md) (commit `48e6edb`, KDN-v2 eğitilmeden önce). Bulgular: [`results/v2_findings.md`](results/v2_findings.md)
+- [x] Public veri: SNDlib Abilene topolojisi ve 5 dk trafik matrisleri (Zhang 2004), KDN VNF CPU ölçümleri (Snort/Firewall/OVS); `scripts/fetch_data.sh` SHA256 doğrulamalı
+- [x] Topoloji SNDlib ile birebir (v1'deki "Abilene benzeri" topoloji düzeltildi); gecikme coğrafi (5 µs/km); gecikme ağırlıklı yönlendirme
+- [x] İstekler gerçek OD hacmine göre ingress/egress alıyor, varış oranı gün içi profili izliyor; train (Mar–Haz) ve test (Tem–Eyl) zamansal ayrımı
+- [x] Gizli VNF yükü KDN ölçümlerinden k-NN ile; işleme gecikmesi s_v/(1−ρ)
+- [x] Politikalar: greedy, smart-v2, smart-load(α*, train'de ayarlandı → α*=10), oracle, kdn2, kdn2-gate, random; keşif amaçlı: cands-prop, smart-nowake, smart-nowake-load
+- [x] Testler: v2 için kaynak ve yük korunumu, schedule determinizmi, SNDlib topoloji kontrolü, oracle doğruluğu (39 test)
+- [x] Ana çalışma (1050 koşu) + duyarlılık S1/S2 (u0 0.4/0.8, doğrusal gecikme) + keşif ablasyonları + teşhis
+- [x] **Sonuç (özet):**
+  - **Düşük/orta yük (λ≤0.1):** KDN, smart-v2'den 0.4–8.3 ms hızlı ve CPU ağırlıklı kabulü +1–3 pp yüksek (H1 ✅).
+  - **Yüksek yük (λ≥0.2):** 1.1–1.3 ms yavaş (H1 ❌); ayarlanmış heuristic'ten 1.5–1.7 ms kötü.
+  - **Oracle farkı:** KDN ≈ oracle (fark ≈ 0, R² 0.994).
+  - **Öğrenmenin katkısı:** 0.2–0.5 ms; düşük yük kazancının çoğu aday kümesinden ve smart'ın enerji amaçlı cezasından geliyor.
+  - **Yüksek yükteki kayıp:** sebebi miyop karar verme.
+  - **Duyarlılık:** λ=0.2 sonucu tüm varyantlarda aynı.
+- [ ] Opsiyonel 4B (kapalı döngü), GÉANT: zaman kalırsa (keşif amaçlı)
 
 ### Faz 5 — Makale (LaTeX, `manuscript/`)
 - [ ] `IEEE Conference Template Latex.zip` → `manuscript/` (IEEEtran, `\documentclass[conference,a4paper]{IEEEtran}`). `.docx` kullanılmayacak.
@@ -272,6 +272,7 @@ Faz 3 çıkarımları (v1_findings "Implications"): (1) ML, kontrolcünün kapal
 | Tarih | Faz | Not |
 |---|---|---|
 | 2026-11-19 | 0 | Kod ve rapor incelendi, v1 tekrar üretildi, ablasyon ön deneyi yapıldı, rollout planı yazıldı. |
+| 2026-11-19 | 4 | `faz-4-v2`: ön kayıt (48e6edb), trace-driven ortam, ana çalışma + duyarlılık + keşif ablasyonları; bulgular `results/v2_findings.md`. Karışık sonuç: düşük yükte kazanç, yüksek yükte kayıp; KDN ≈ oracle. |
 | 2026-11-19 | 3 | `faz-3-evaluation`: λ taraması, 8 algoritma × 30 seed, model analizi, CPU ağırlıklı kabul; bulgular `results/v1_findings.md`. |
 | 2026-11-19 | 2 | `faz-2-refactor`: ortak çekirdek, registry, deney koşucusu, testler; v1 tohum bazında birebir korunuyor. README gerçekten UTF-8'e çevrildi (Faz 1'de kodlama korunmuştu). Push bu ortamdan yapılamadı (GitHub kimlik bilgisi yok), kullanıcı push edecek. |
 | 2026-11-19 | 0–1 | `faz-01-reproducibility` branch'i: hijyen, seed ve CLI eklendi, `run_all.sh` yazıldı, v1 sonuçları `results/v1/` altında. Teslim tarihi: **24 Kasım 23:00** (D1); kapsam Faz 4 dahil (D2). |

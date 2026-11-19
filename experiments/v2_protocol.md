@@ -94,4 +94,13 @@ when this protocol was written and motivated its design. v1 is exploratory; v2 i
 - Closed-loop retraining on kdn2's own telemetry.
 
 ## Deviations
-_None yet._
+Recorded after registration. The pre-registered text above is unchanged.
+
+1. **Training-data size (2026-11-19, before training).** Section 4 says "5 runs per λ; seeds 1001–1020". The two statements conflict (4 λ × 5 = 20 runs). The implementation ran all 20 seeds at each of the 4 λ values (80 runs, 156 495 requests). Validation seeds 1017–1020 were held out at every λ.
+2. **Gatekeeper features (unspecified in section 3).** kdn2-gate uses SFC type, packets, flows, network free CPU, network mean ρ, the largest free CPU on any node, and the smallest free link bandwidth.
+3. **H3 check.** The lower bound of the two-sided 95 % t-CI of the paired difference must exceed −1 pp. This is slightly stricter than a one-sided 95 % bound.
+4. **Additional exploratory analyses (decided after seeing the main results; labelled exploratory everywhere):**
+   - `cands-prop`: the kdn2 candidate set, selected by known propagation delay only (isolates the value of learning).
+   - `smart-nowake`: smart-v2 without the wake-up penalty (a pure latency heuristic).
+   - `smart-nowake-load`: the same plus α*·ρ, reusing α* tuned for smart-load (not re-tuned).
+   Motivation: the main results showed kdn2 ≈ oracle, and a large kdn2 advantage over smart-v2 only at low load. Both suggested that the candidate set, not learning, drives the gain.
