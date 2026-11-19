@@ -81,3 +81,31 @@ def write_report(runs, out, title):
         f.write(h.to_markdown(index=False, floatfmt='.4g'))
         f.write('\n')
     return summary, h
+
+
+V3_HYPOTHESES = [('H1', 'kdn3', 'smart-load'), ('H2', 'kdn3', 'model-nom'), ('H3', 'kdn3', 'model-cal'),
+                 ('H4', 'kdn3', 'cands-prop')]
+V3_REPORTED = [('gap', 'kdn3', 'oracle'), ('vs-smart', 'kdn3', 'smart')]
+
+
+def hypotheses_v3(runs):
+    """v3 protocol section 5: paired two-sided Wilcoxon over seeds per (sigma, lambda) cell,
+    Holm across all cells of a hypothesis. Also reports kdn3-oracle and kdn3-smart (no test)."""
+    rows = []
+    for hyp, a, b in V3_HYPOTHESES + V3_REPORTED:
+        cells = []
+        for (sigma, lam), g in runs.groupby(['sigma', 'lambda']):
+            p = g.pivot(index='seed', columns='algorithm', values='lat_mean')
+            cells.append((sigma, lam, (p[a] - p[b]).dropna()))
+        raw = [_wilcoxon(d, 'two-sided') for *_, d in cells]
+        adj = holm(raw)
+        for (sigma, lam, d), pr, pa in zip(cells, raw, adj):
+            lo, hi = _ci(d)
+            tested = hyp.startswith('H')
+            rows.append({'hypothesis': hyp, 'sigma': sigma, 'lambda': lam, 'comparison': f'{a} - {b}',
+                         'mean_diff': d.mean(), 'ci95_lo': lo, 'ci95_hi': hi, 'n_lower': int((d < 0).sum()),
+                         'n_higher': int((d > 0).sum()), 'p': pr if tested else np.nan,
+                         'p_holm': pa if tested else np.nan,
+                         'result': ('' if not tested else 'no significant difference' if pa >= 0.05
+                                    else f'{a} better' if d.mean() < 0 else f'{b} better')})
+    return pd.DataFrame(rows)

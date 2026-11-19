@@ -5,7 +5,7 @@ import numpy as np
 
 from src.algorithms.base import BasePlacement
 from src.placement import PlacementResult, build_chain, first_hop, graph_order
-from src.v2.features import _net, candidate_features, rho, state_features
+from src.v2.features import _net, candidate_features, host_reservations, rho, state_features, vnf_matrix, vnf_rows
 
 W = 'delay'
 WAKE_UP_PENALTY = 1000.0
@@ -87,12 +87,15 @@ class ShuffledFirstFit(BasePlacement):
 
 
 class CandidatePolicy(BasePlacement):
-    """Generates the shared candidate set (protocol section 3) and selects one with ``choose``."""
+    """Generates the shared candidate set (protocol section 3) and selects one with ``choose``.
+
+    ``wake_up_penalty`` applies to the smart-based generators: 1000 in v2, 0 in v3."""
     name = 'candidates'
     CANDIDATE_ALPHAS = (2.0, 10.0, 50.0)
 
-    def __init__(self, rng):
-        self.generators = ([Smart2(0.0)] + [Smart2(a) for a in self.CANDIDATE_ALPHAS] +
+    def __init__(self, rng, wake_up_penalty=WAKE_UP_PENALTY):
+        p = wake_up_penalty
+        self.generators = ([Smart2(0.0, p)] + [Smart2(a, p) for a in self.CANDIDATE_ALPHAS] +
                            [LeastUtilised(), ColocateFromIngress(), ShuffledFirstFit(rng), ShuffledFirstFit(rng)])
         self.rng = rng
 
@@ -137,8 +140,8 @@ class Oracle(CandidatePolicy):
     """Knows the hidden ground truth: picks the candidate with the lowest true latency."""
     name = 'oracle'
 
-    def __init__(self, rng, world):
-        super().__init__(rng)
+    def __init__(self, rng, world, wake_up_penalty=WAKE_UP_PENALTY):
+        super().__init__(rng, wake_up_penalty)
         self.world = world
 
     def choose(self, graph, req, cands):
@@ -157,8 +160,8 @@ class KDN2(CandidatePolicy):
     """Lowest (known propagation + predicted processing) delay among the candidates."""
     name = 'kdn2'
 
-    def __init__(self, rng, models_dir, use_gate=False):
-        super().__init__(rng)
+    def __init__(self, rng, models_dir, use_gate=False, wake_up_penalty=WAKE_UP_PENALTY):
+        super().__init__(rng, wake_up_penalty)
         import xgboost as xgb
         self.regressor = xgb.XGBRegressor()
         self.regressor.load_model(os.path.join(models_dir, 'kdn2_regressor.json'))
@@ -184,22 +187,79 @@ class KDN2(CandidatePolicy):
         return cands[i]
 
 
+class ModelSelector(CandidatePolicy):
+    """v3: analytical selector that knows the M/M/1-style delay formula and the nominal s_v.
+
+    Predicted latency = propagation + sum_v kappa_hat[host] * s_v / (1 - min(rho_hat[host], rho_max)),
+    rho_hat = (measured load + u0_hat * CPU reserved by this SFC on the host) / cpu_max.
+    ``calibrated=False`` (model-nom) uses kappa_hat = 1; ``True`` (model-cal) uses the per-node fit.
+    """
+    name = 'model'
+
+    def __init__(self, rng, world, models_dir, calibrated, wake_up_penalty=WAKE_UP_PENALTY):
+        super().__init__(rng, wake_up_penalty)
+        import json
+        with open(os.path.join(models_dir, 'calibration.json')) as f:
+            cal = json.load(f)
+        self.u0_hat = cal['u0_hat']
+        self.kappa = cal['kappa_hat'] if calibrated else {}
+        self.service, self.rho_max = world.cfg['service_ms'], world.cfg['rho_max']
+
+    def predict(self, graph, req, res):
+        hosts = host_reservations(res)
+        total = 0.0
+        for node, vnf, _, _ in res.placements:
+            rho = (graph.nodes[node]['load'] + self.u0_hat * hosts[node][1]) / graph.nodes[node]['cpu_max']
+            total += self.kappa.get(node, 1.0) * self.service[vnf] / (1.0 - min(rho, self.rho_max))
+        return total
+
+    def choose(self, graph, req, cands):
+        return min(cands, key=lambda c: c.delay + self.predict(graph, req, c))
+
+
+class KDN3(CandidatePolicy):
+    """v3: propagation + sum of per-VNF processing delays predicted by an XGBoost regressor (no formula)."""
+    name = 'kdn3'
+
+    def __init__(self, rng, models_dir, wake_up_penalty=WAKE_UP_PENALTY):
+        super().__init__(rng, wake_up_penalty)
+        import xgboost as xgb
+        self.regressor = xgb.XGBRegressor()
+        self.regressor.load_model(os.path.join(models_dir, 'kdn3_regressor.json'))
+        self.regressor.set_params(n_jobs=1)
+
+    def choose(self, graph, req, cands):
+        net_rho = _net(graph)[0]
+        rows, owner = [], []
+        for i, c in enumerate(cands):
+            r = vnf_rows(graph, req, c, net_rho)
+            rows += r
+            owner += [i] * len(r)
+        pred = self.regressor.predict(vnf_matrix(rows))
+        proc = np.bincount(owner, weights=pred, minlength=len(cands))
+        total = np.array([c.delay for c in cands]) + proc
+        i = int(np.argmin(total))
+        cands[i].info['pred_proc'] = float(proc[i])
+        return cands[i]
+
+
 def build_policy(name, world, rng, models_dir=None, alpha_star=None):
+    p = world.cfg.get('wake_up_penalty', WAKE_UP_PENALTY)   # v2: 1000 (not in config), v3: 0
     if name == 'greedy':
         return Greedy2()
     if name == 'random':
         return Random2(rng)
     if name == 'smart':
-        return Smart2(0.0)
+        return Smart2(0.0, p)
     if name == 'smart-load':
         if alpha_star is None:
             raise ValueError('smart-load needs alpha_star (tuned on the train split)')
-        return Smart2(alpha_star)
+        return Smart2(alpha_star, p)
     if name.startswith('smart-a'):          # used for alpha tuning: smart-a<alpha>
-        return Smart2(float(name[len('smart-a'):]))
-    # --- exploratory (not pre-registered) ---
-    if name == 'cands-prop':
-        return PropOnly(rng)
+        return Smart2(float(name[len('smart-a'):]), p)
+    if name == 'cands-prop':                # v2: exploratory; v3: pre-registered
+        return PropOnly(rng, p)
+    # --- v2 exploratory (not pre-registered) ---
     if name == 'smart-nowake':
         return Smart2(0.0, wake_up_penalty=0.0)
     if name == 'smart-nowake-load':
@@ -207,11 +267,18 @@ def build_policy(name, world, rng, models_dir=None, alpha_star=None):
             raise ValueError('needs alpha_star')
         return Smart2(alpha_star, wake_up_penalty=0.0)
     if name == 'behaviour':
-        return Behaviour(rng)
+        return Behaviour(rng, p)
     if name == 'oracle':
-        return Oracle(rng, world)
+        return Oracle(rng, world, p)
     if name == 'kdn2':
-        return KDN2(rng, models_dir)
+        return KDN2(rng, models_dir, wake_up_penalty=p)
     if name == 'kdn2-gate':
-        return KDN2(rng, models_dir, use_gate=True)
+        return KDN2(rng, models_dir, use_gate=True, wake_up_penalty=p)
+    # --- v3 ---
+    if name == 'model-nom':
+        return ModelSelector(rng, world, models_dir, calibrated=False, wake_up_penalty=p)
+    if name == 'model-cal':
+        return ModelSelector(rng, world, models_dir, calibrated=True, wake_up_penalty=p)
+    if name == 'kdn3':
+        return KDN3(rng, models_dir, wake_up_penalty=p)
     raise KeyError(name)

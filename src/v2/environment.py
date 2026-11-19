@@ -21,6 +21,14 @@ VNF_FAMILY = {'NAT': 'Firewall', 'Firewall': 'Firewall', 'IDS': 'Snort', 'DPI': 
 SPLIT_CODES = {'train': 1, 'test': 2}
 
 
+def node_speed_factors(nodes, sigma, perm_seed):
+    """v3 hidden node speed factor kappa_n = exp(sigma * z_pi(n)), z_i = Phi^-1((i + 0.5) / N) (v3 protocol 2)."""
+    from scipy.stats import norm
+    z = norm.ppf((np.arange(len(nodes)) + 0.5) / len(nodes))
+    perm = np.random.default_rng(perm_seed).permutation(len(nodes))
+    return {n: float(np.exp(sigma * z[perm[i]])) for i, n in enumerate(nodes)}
+
+
 def load_env_config(path):
     with open(path) as f:
         return json.load(f)
@@ -49,6 +57,8 @@ class V2World:
         self.pool = pool
         self.pool_idx = {'Web': np.where(tercile == 0)[0], 'VoIP': np.where(tercile == 1)[0],
                          'Video': np.where(tercile == 2)[0]}
+        self.speed = node_speed_factors(sorted(self.nodes_xy), cfg.get('speed_sigma', 0.0),
+                                        cfg.get('speed_perm_seed', 2026))
 
     # --- topology -------------------------------------------------------------------------
     def build_graph(self):
@@ -120,20 +130,24 @@ class V2World:
             add[node] = add.get(node, 0.0) + u0 * cpu * r
         return add
 
-    def processing_delay(self, graph, res, req):
+    def vnf_delays(self, graph, res, req):
+        """True processing delay of every placed VNF (same order as ``res.placements``)."""
         c = self.cfg
         add = self.added_loads(res, req)
-        total = 0.0
+        out = []
         for node, vnf, _, _ in res.placements:
             rho = (graph.nodes[node]['load'] + add[node]) / graph.nodes[node]['cpu_max']
-            s = c['service_ms'][vnf]
+            s = c['service_ms'][vnf] * self.speed[node]
             if c['delay_fn'] == 'mm1':
-                total += s / (1.0 - min(rho, c['rho_max']))
+                out.append(s / (1.0 - min(rho, c['rho_max'])))
             elif c['delay_fn'] == 'linear':
-                total += s * (1.0 + 4.0 * rho)
+                out.append(s * (1.0 + 4.0 * rho))
             else:
                 raise ValueError(c['delay_fn'])
-        return total
+        return out
+
+    def processing_delay(self, graph, res, req):
+        return sum(self.vnf_delays(graph, res, req))
 
     def true_latency(self, graph, res, req):
         return res.delay + self.processing_delay(graph, res, req)
@@ -159,7 +173,8 @@ class V2Simulation(Simulation):
         dt = (time.perf_counter() - t0) * 1e3
         if res.success:
             res.info['prop_delay'] = res.delay
-            res.info['proc_delay'] = self.world.processing_delay(self.graph, res, req)
+            res.info['vnf_delays'] = self.world.vnf_delays(self.graph, res, req)
+            res.info['proc_delay'] = sum(res.info['vnf_delays'])
             res.delay = res.info['prop_delay'] + res.info['proc_delay']
         if self.observer is not None:
             self.observer(self.env.now, req, self.graph, res)
