@@ -145,10 +145,9 @@ gereksiz. Önerilen hikaye:
 - **v2 (seminer)** gecikme modelini KDN'in asıl önermesine uygun hale getirir: kontrolcü ağın davranış fonksiyonunu bilmez, telemetriden öğrenir (RouteNet benzeri motivasyon).
 - Sonuç ne çıkarsa çıksın (ML Smart'ı geçse de geçmese de) dürüstçe raporlanır. Danışmana verilen seminer özetindeki "lower latency than baselines" beklentisi tutmazsa, Discussion'da açıkça tartışılır.
 
-**Self-plagiarism notu:** Makale önceki ders raporunun üzerine kuruluyor. Bu durum makalede veya
-Acknowledgements'ta belirtilmeli, metin kelimesi kelimesine kopyalanmamalı, şekiller yeniden
-üretilmeli. Ders politikası izin veriyorsa AI-araç kullanımı da beyan edilmeli. Bu konu danışmana
-sorulacak.
+**Self-plagiarism notu:** Önceki ders raporu yayımlanmamış küçük bir ödev olduğu için makalede
+atıf yapılmayacak (karar: kullanıcı, 2026-11-19). Yine de metin oradan kopyalanmayacak, şekiller
+yeniden üretilecek. AI-araç kullanım beyanı ders politikasına göre belirlenecek.
 
 ---
 
@@ -162,7 +161,7 @@ sorulacak.
 - [x] `main@8ea6f2e` için `v1-course-report` tag'i at (ders raporunun kod hali, şimdilik lokal)
 - [x] README'yi UTF-8'e çevir, "Master's Thesis" ifadesini düzelt, tekrar üretim talimatlarını ekle
 - [x] `.gitignore`: `.venv/`, `data/` ve `models/` yok sayılıyor; `results/` altındaki özet tablolar (csv/md) takip ediliyor, ham loglar edilmiyor. `__pycache__` repodan çıkarıldı. Makale klasörü `manuscript/` olacak (`paper*` deseni yüzünden).
-- [ ] `report.pdf` repoya alınacak mı? (şu an untracked)
+- [x] `report.pdf` repoya alınmayacak; lokal untracked kalacak (tüm fazlardan sonra v1/v2 kıyası için saklanıyor).
 - [x] Python 3.14'e uygun pinler (`numpy==2.2.6`'nın 3.14 için wheel'i yok, bu yüzden güncellendi); `seaborn` ve `pytest` eklendi. v1 sonuçları yeni sürümlerle de birebir aynı.
 
 ### Faz 1 — v1'i tekrar üretilebilir hale getir (davranış değişikliği yok)
