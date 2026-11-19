@@ -7,6 +7,48 @@
 
 ---
 
+## ▶ GÜNCEL DURUM (2026-11-19 gece) — yeni chat buradan başlasın
+
+**Branch:** `faz-4c-v3` (üstünde `faz-4-v2` var; ikisi de `seminar-paper`'a henüz merge edilmedi, push yok).
+**Teslim:** 24 Kasım 23:00. **Sunum:** ~15 dk. **Kullanıcı tercihi:** her şeyi kısa ve sade anlat (ML mühendisi
+çerçevesi: veri → model → ne tahmin ediyor → metrik neden böyle → gerçek hayatta ne değişir). Yeni varyant/formül ekleme.
+
+**Projenin tek paragraflık özeti (sunumda bu anlatılacak):**
+Gerçek Abilene topolojisi ve 2004 trafik kayıtlarıyla çalışan bir simülatör var. VNF işleme gecikmesini biz tanımlıyoruz:
+düğüm doldukça yavaşlıyor, bazı düğümler gizlice daha yavaş (hız farkı σ ile ayarlanıyor). Simülatörde rastgele
+yerleşimlerle ~210 bin satır veri üretildi (girdi: VNF tipi, düğüm, düğüm doluluğu, trafik; çıktı: o VNF'in gecikmesi)
+ve XGBoost regresyon eğitildi. R² ≈ 0.99 çünkü veri gürültüsüz, model bizim formülümüzü geri öğreniyor; gerçek ağda
+veri telemetriden gelir ve bu kadar temiz olmaz. Yeni istek gelince model her VNF için 12 düğümü deneyip tahmini
+gecikmesi (+ yol gecikmesi) en düşük olanı seçiyor (**kdn3-greedy, asıl yöntem**).
+
+**Sonuç (sade):** Ağ boşken model basit kuraldan (smart-load) hızlı; düğümler arası fark büyüdükçe kazanç artıyor
+(σ=1, λ=0.02: −4.5 ms). Ağ orta/doluyken çoğunlukla berabere; σ=1 ve dolu ağda ~1 ms kötü. Sebep model değil
+(gerçek gecikmeyi bilen oracle-greedy de aynı): her isteği tek başına optimize etmek (miyopluk). Formülü bilip düğüm
+hızlarını kalibre eden basit hesap (model-cal) da modelle aynı sonucu alıyor; modelin artısı formülü bilmeye gerek bırakmaması.
+
+**Bugün alınan kararlar:**
+- v1 (ders projesi) makalede **anlatılmayacak**; v2 de makalede yer almayacak, v3 + v3.1 ana çalışma.
+- Uyandırma cezası (v1 kalıntısı) kaldırıldı. Öğrenilmiş gatekeeper (istek reddeden sınıflandırıcı) **çıkarıldı**:
+  v1'deki "kazancı" istek sayısı metriğinin artefaktıydı (büyük Video SFC'lerini reddedip küçükleri kabul ediyordu).
+  İstek reddi hâlâ var ama yalnızca kapasiteye göre (CPU/RAM/bant yetmezse); λ=0.4'te kabul ~%20.
+- "Hazır adaylardan seç" yaklaşımı (kdn3) makalede **kıyaslanan mimari** olarak kalacak (ön kayıtlı sonuç, gizlenmez):
+  adaylar düğüm hızından habersiz üretildiği için tavan oluşturuyor; modelin kendisi yerleştirmesi 20 durumun 18'inde daha iyi.
+- Çok detaylı karşılaştırmalar (model-nom, model-cal, Holm, S1/S2) sunumda yok; sorulursa `results/v3_findings.md`.
+
+**Kaynaklar:** ön kayıt `experiments/v3_protocol.md` (`82229de`), ek `experiments/v3_1_addendum.md` (`fd640b6`);
+bulgular `results/v3_findings.md` (§7 = v3.1); kod `scripts/v3.py` (`run`, `analyze`, `greedy`), `src/v2/*`; 51 test geçiyor.
+`docs/progress_report.html` ve `docs/architecture.html` **v2'ye göre, güncel değil**.
+
+**Sıradaki adımlar:**
+1. Tek sonuç grafiği: x = ağ yükü (λ), y = ortalama gecikme; çizgiler: smart-load, kdn3 (adaylar), kdn3-greedy,
+   oracle-greedy; σ=0 / 0.5 / 1 için 3 panel. `scripts/make_figures.py`'a eklenecek.
+2. `faz-4-v2` ve `faz-4c-v3`'ü `seminar-paper`'a merge (kullanıcı onayıyla).
+3. Faz 5: makale (aşağıdaki plan v3'e göre sadeleştirilecek: v1/gatekeeper bölümleri yok).
+4. Sunum slaytları (önerilen akış: problem → kurulum (yukarıdaki paragraf) → tek grafik → dürüst kısım: R² neden 0.99,
+   ağır yükte neden kaybediyoruz).
+
+---
+
 ## 0. Bağlam
 
 Bu repo, *Computer Networks: Basic Protocols* dersinde dönem projesi olarak yapıldı ve 4 sayfalık
@@ -202,23 +244,32 @@ Detaylı bulgular (İngilizce, makaleye taşınabilir): [`results/v1_findings.md
   - **F3:** Gatekeeper'ın kabul "kazancı" sayım artefaktı. Büyük SFC'leri (Video) reddederek sayıyı artırıyor; CPU ağırlıklı kabulde ise gatekeeper'ı kapatmak daha iyi.
   - **F4:** Gatekeeper ile logistic regresyon neredeyse eşit. Regressor'ın kararlarını pratikte iki aksiyon özelliği belirliyor (sadece bunlarla doğrusal model R² 0.76). Rapordaki "network_free_bw en önemli özellik" yorumu `weight` metriğinden kaynaklanan bir yanılgıydı.
 
-### Faz 4 — Yöntem iyileştirmesi (ML'nin gerçekten değer katabileceği kurgu)
-Faz 3 çıkarımları (v1_findings "Implications"): (1) ML, kontrolcünün kapalı formda hesaplayamadığı bir şeyi öğrenmeli; (2) aday kümesi güçlü olmalı (Smart'ın kendi yerleşimi dahil); (3) ayarlanmış (tuned) yük-bilinçli bir heuristic baseline olmalı; (4) CPU ağırlıklı kabul raporlanmalı.
+### Faz 4 — Yöntem iyileştirmesi: trace-driven v2 ✅ (merge onayı bekliyor)
+Ön kayıt: [`experiments/v2_protocol.md`](experiments/v2_protocol.md) (commit `48e6edb`, KDN-v2 eğitilmeden önce). Bulgular: [`results/v2_findings.md`](results/v2_findings.md)
+- [x] Public veri: SNDlib Abilene topolojisi ve 5 dk trafik matrisleri (Zhang 2004), KDN VNF CPU ölçümleri (Snort/Firewall/OVS); `scripts/fetch_data.sh` SHA256 doğrulamalı
+- [x] Topoloji SNDlib ile birebir (v1'deki "Abilene benzeri" topoloji düzeltildi); gecikme coğrafi (5 µs/km); gecikme ağırlıklı yönlendirme
+- [x] İstekler gerçek OD hacmine göre ingress/egress alıyor, varış oranı gün içi profili izliyor; train (Mar–Haz) ve test (Tem–Eyl) zamansal ayrımı
+- [x] Gizli VNF yükü KDN ölçümlerinden k-NN ile; işleme gecikmesi s_v/(1−ρ)
+- [x] Politikalar: greedy, smart-v2, smart-load(α*, train'de ayarlandı → α*=10), oracle, kdn2, kdn2-gate, random; keşif amaçlı: cands-prop, smart-nowake, smart-nowake-load
+- [x] Testler: v2 için kaynak ve yük korunumu, schedule determinizmi, SNDlib topoloji kontrolü, oracle doğruluğu (39 test)
+- [x] Ana çalışma (1050 koşu) + duyarlılık S1/S2 (u0 0.4/0.8, doğrusal gecikme) + keşif ablasyonları + teşhis
+- [x] **Sonuç (özet):**
+  - **Düşük/orta yük (λ≤0.1):** KDN, smart-v2'den 0.4–8.3 ms hızlı ve CPU ağırlıklı kabulü +1–3 pp yüksek (H1 ✅).
+  - **Yüksek yük (λ≥0.2):** 1.1–1.3 ms yavaş (H1 ❌); ayarlanmış heuristic'ten 1.5–1.7 ms kötü.
+  - **Oracle farkı:** KDN ≈ oracle (fark ≈ 0, R² 0.994).
+  - **Öğrenmenin katkısı:** 0.2–0.5 ms; düşük yük kazancının çoğu aday kümesinden ve smart'ın enerji amaçlı cezasından geliyor.
+  - **Yüksek yükteki kayıp:** sebebi miyop karar verme.
+  - **Duyarlılık:** λ=0.2 sonucu tüm varyantlarda aynı.
+- [ ] Opsiyonel 4B (kapalı döngü), GÉANT: zaman kalırsa (keşif amaçlı)
 
-**4A: Gerçekçi gecikme modeli ve v2 politikası.**
-- [ ] Topoloji: sabit ve coğrafi link gecikmeleri (train ve eval aynı topoloji); SNDlib Abilene kenar listesinin doğrulanması
-- [ ] Her SFC isteğine ingress/egress düğümü; gecikme = ingress→VNF1 + VNF'ler arası + VNFn→egress + Σ işleme gecikmesi
-- [ ] VNF işleme gecikmesi düğüm yüküne bağlı ve doğrusal olmayan bir fonksiyon (M/M/1 benzeri `base/(1−ρ)` + gürültü); kontrolcü bu fonksiyonu bilmiyor, telemetride sadece ölçülen gecikme görünüyor
-- [ ] Yönlendirme gecikme ağırlıklı (`weight='delay'`)
-- [ ] Aday üreteci: Smart-v2 (yayılım gecikmesi + wake-up), load-balanced, co-location, k-shortest ve random varyantları
-- [ ] Aday bazlı özellikler: yayılım gecikmesi toplamı, hop, seçilen düğümlerin kullanım oranları (max/mean), path bottleneck BW, düğüm başına VNF sayısı
-- [ ] Baseline'lar: Greedy, Smart-v2 (yükü bilmiyor), **Smart-load(α)** (kullanım cezası; α grid search ile ayarlanmış, en iyi α raporlanacak), Oracle (gerçek gecikmeyi bilen seçici, üst sınır), KDN-v2
-- [ ] Gatekeeper: CPU ağırlıklı kabulle yeniden değerlendirilecek; fayda yoksa v2'den çıkarılıp Discussion'da anlatılacak
-- [ ] Değerlendirme: Faz 3 protokolüyle (30 seed, λ taraması, paired test)
-
-**4B (opsiyonel):** kapalı döngü yeniden eğitim (KDN kendi telemetrisiyle, 2–3 iterasyon).
-
-- [ ] Kabul kriteri: v2 sonuçları Faz 3 protokolüyle üretilmiş ve bulgular `results/v2_findings.md` dosyasına yazılmış.
+### Faz 4C — v3: düğüm hızı heterojenliği, formülü bilen baseline'lar, cezasız heuristic ✅ (merge onayı bekliyor)
+Ön kayıt: [`experiments/v3_protocol.md`](experiments/v3_protocol.md) (commit `82229de`, veri üretilmeden önce). Bulgular: [`results/v3_findings.md`](results/v3_findings.md)
+- [x] Uyandırma cezası kaldırıldı (smart ve aday üreticileri); gatekeeper çıkarıldı
+- [x] Gizli düğüm hız faktörü κ_n, σ ∈ {0, 0.25, 0.5, 1}; duyarlılık: doğrusal gecikme (S1), farklı permütasyon (S2)
+- [x] Yeni seçiciler: model-nom (formül, nominal s_v), model-cal (formül + κ̂ kalibrasyonu), kdn3 (VNF başına XGBoost)
+- [x] v2 sonuçları birebir korunuyor; 48 test
+- [x] **Sonuç (özet):** kdn3 ≈ model-cal ≈ oracle (H3: fark yok). Hafif yükte kdn3'ün kazancı σ ile büyüyor (σ=1, λ=0.02: smart-load'a göre −3.1 ms, model-nom'a göre −2.6 ms). λ ≥ 0.1'de tüm aday seçiciler eşit ve smart-load'dan 0.7–1.9 ms kötü: tavan aday kümesi + miyopluk.
+- [x] v3.1 (ek ön kayıt `fd640b6`): model yerleşimi kendisi kuruyor (kdn3-greedy). Aday listesinden seçmeye göre 20 hücrenin 18'inde daha iyi; ayarlanmış heuristic'e göre hafif yükte σ ile büyüyen kazanç (σ=1, λ=0.02: −4.5 ms), orta/ağır yükte σ≤0.5 eşit, σ=1'de ~1 ms kötü (miyopluk).
 
 ### Faz 5 — Makale (LaTeX, `manuscript/`)
 - [ ] `IEEE Conference Template Latex.zip` → `manuscript/` (IEEEtran, `\documentclass[conference,a4paper]{IEEEtran}`). `.docx` kullanılmayacak.
@@ -228,9 +279,9 @@ Faz 3 çıkarımları (v1_findings "Implications"): (1) ML, kontrolcünün kapal
   - [ ] **Abstract.** Sayılar Faz 3/4'ten; abartısız
   - [ ] **I. Introduction (+ Related Work).** Motivasyon, KDN, katkılar; related work: exact/ILP, heuristic, DRL, GNN/RouteNet, KDN uygulamaları
   - [ ] **II. Material and Methods.** Topoloji, SFC kataloğu, gecikme modeli (v1 ve v2), simülatör, veri üretimi, iki aşamalı model, aday üretimi, baseline ve ablasyonlar, değerlendirme protokolü ve istatistik
-  - [ ] **III. Experimental Results.** Sınıflandırıcı/regressor kalitesi, ana tablo, λ taraması, ablasyon, gatekeeper analizi, karar süresi
+  - [ ] **III. Experimental Results.** (v3'e göre güncel: v1 ve gatekeeper yok) regressor kalitesi, ana grafik (λ × σ), adaylardan seçme vs modelin kendisi yerleştirmesi, karar süresi
   - [ ] **IV. Conclusion (Future Work)**
-  - [ ] **V. Discussion.** v1'in neden ML'den fayda görmediği, oracle argümanı, tehditler (validity threats: tek topoloji, sentetik trafik, basit kuyruk modeli), etik ve tekrar üretilebilirlik notu
+  - [ ] **V. Discussion.** (v1 anlatılmayacak) R² neden 0.99 (sentetik etiket), miyopluk, aday kümesi tavanı, oracle argümanı, tehditler (validity threats: tek topoloji, sentetik trafik, basit kuyruk modeli), etik ve tekrar üretilebilirlik notu
   - [ ] **Acknowledgements.** Danışman; önceki ders projesinden türetildiği; (politika uygunsa) AI-araç beyanı
   - [ ] **References.** BibTeX (`refs.bib`), her kaynak tek tek doğrulanacak (DOI ve sayfa)
 - [ ] Literatür (doğrulanacak aday listesi; uydurma atıf olmaması için hepsi kontrol edilecek):
@@ -272,6 +323,8 @@ Faz 3 çıkarımları (v1_findings "Implications"): (1) ML, kontrolcünün kapal
 | Tarih | Faz | Not |
 |---|---|---|
 | 2026-11-19 | 0 | Kod ve rapor incelendi, v1 tekrar üretildi, ablasyon ön deneyi yapıldı, rollout planı yazıldı. |
+| 2026-11-19 | 4C | `faz-4c-v3`: ön kayıt (82229de), κ heterojenliği + model-nom/model-cal/kdn3; 6 ortam × 1350 koşu. Öğrenme = kalibrasyon; hafif yükte σ ile büyüyen kazanç; λ≥0.1'de aday kümesi tavanı ve miyopluk. |
+| 2026-11-19 | 4 | `faz-4-v2`: ön kayıt (48e6edb), trace-driven ortam, ana çalışma + duyarlılık + keşif ablasyonları; bulgular `results/v2_findings.md`. Karışık sonuç: düşük yükte kazanç, yüksek yükte kayıp; KDN ≈ oracle. |
 | 2026-11-19 | 3 | `faz-3-evaluation`: λ taraması, 8 algoritma × 30 seed, model analizi, CPU ağırlıklı kabul; bulgular `results/v1_findings.md`. |
 | 2026-11-19 | 2 | `faz-2-refactor`: ortak çekirdek, registry, deney koşucusu, testler; v1 tohum bazında birebir korunuyor. README gerçekten UTF-8'e çevrildi (Faz 1'de kodlama korunmuştu). Push bu ortamdan yapılamadı (GitHub kimlik bilgisi yok), kullanıcı push edecek. |
 | 2026-11-19 | 0–1 | `faz-01-reproducibility` branch'i: hijyen, seed ve CLI eklendi, `run_all.sh` yazıldı, v1 sonuçları `results/v1/` altında. Teslim tarihi: **24 Kasım 23:00** (D1); kapsam Faz 4 dahil (D2). |
