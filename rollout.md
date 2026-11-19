@@ -7,6 +7,48 @@
 
 ---
 
+## ▶ GÜNCEL DURUM (2026-11-19 gece) — yeni chat buradan başlasın
+
+**Branch:** `faz-4c-v3` (üstünde `faz-4-v2` var; ikisi de `seminar-paper`'a henüz merge edilmedi, push yok).
+**Teslim:** 24 Kasım 23:00. **Sunum:** ~15 dk. **Kullanıcı tercihi:** her şeyi kısa ve sade anlat (ML mühendisi
+çerçevesi: veri → model → ne tahmin ediyor → metrik neden böyle → gerçek hayatta ne değişir). Yeni varyant/formül ekleme.
+
+**Projenin tek paragraflık özeti (sunumda bu anlatılacak):**
+Gerçek Abilene topolojisi ve 2004 trafik kayıtlarıyla çalışan bir simülatör var. VNF işleme gecikmesini biz tanımlıyoruz:
+düğüm doldukça yavaşlıyor, bazı düğümler gizlice daha yavaş (hız farkı σ ile ayarlanıyor). Simülatörde rastgele
+yerleşimlerle ~210 bin satır veri üretildi (girdi: VNF tipi, düğüm, düğüm doluluğu, trafik; çıktı: o VNF'in gecikmesi)
+ve XGBoost regresyon eğitildi. R² ≈ 0.99 çünkü veri gürültüsüz, model bizim formülümüzü geri öğreniyor; gerçek ağda
+veri telemetriden gelir ve bu kadar temiz olmaz. Yeni istek gelince model her VNF için 12 düğümü deneyip tahmini
+gecikmesi (+ yol gecikmesi) en düşük olanı seçiyor (**kdn3-greedy, asıl yöntem**).
+
+**Sonuç (sade):** Ağ boşken model basit kuraldan (smart-load) hızlı; düğümler arası fark büyüdükçe kazanç artıyor
+(σ=1, λ=0.02: −4.5 ms). Ağ orta/doluyken çoğunlukla berabere; σ=1 ve dolu ağda ~1 ms kötü. Sebep model değil
+(gerçek gecikmeyi bilen oracle-greedy de aynı): her isteği tek başına optimize etmek (miyopluk). Formülü bilip düğüm
+hızlarını kalibre eden basit hesap (model-cal) da modelle aynı sonucu alıyor; modelin artısı formülü bilmeye gerek bırakmaması.
+
+**Bugün alınan kararlar:**
+- v1 (ders projesi) makalede **anlatılmayacak**; v2 de makalede yer almayacak, v3 + v3.1 ana çalışma.
+- Uyandırma cezası (v1 kalıntısı) kaldırıldı. Öğrenilmiş gatekeeper (istek reddeden sınıflandırıcı) **çıkarıldı**:
+  v1'deki "kazancı" istek sayısı metriğinin artefaktıydı (büyük Video SFC'lerini reddedip küçükleri kabul ediyordu).
+  İstek reddi hâlâ var ama yalnızca kapasiteye göre (CPU/RAM/bant yetmezse); λ=0.4'te kabul ~%20.
+- "Hazır adaylardan seç" yaklaşımı (kdn3) makalede **kıyaslanan mimari** olarak kalacak (ön kayıtlı sonuç, gizlenmez):
+  adaylar düğüm hızından habersiz üretildiği için tavan oluşturuyor; modelin kendisi yerleştirmesi 20 durumun 18'inde daha iyi.
+- Çok detaylı karşılaştırmalar (model-nom, model-cal, Holm, S1/S2) sunumda yok; sorulursa `results/v3_findings.md`.
+
+**Kaynaklar:** ön kayıt `experiments/v3_protocol.md` (`82229de`), ek `experiments/v3_1_addendum.md` (`fd640b6`);
+bulgular `results/v3_findings.md` (§7 = v3.1); kod `scripts/v3.py` (`run`, `analyze`, `greedy`), `src/v2/*`; 51 test geçiyor.
+`docs/progress_report.html` ve `docs/architecture.html` **v2'ye göre, güncel değil**.
+
+**Sıradaki adımlar:**
+1. Tek sonuç grafiği: x = ağ yükü (λ), y = ortalama gecikme; çizgiler: smart-load, kdn3 (adaylar), kdn3-greedy,
+   oracle-greedy; σ=0 / 0.5 / 1 için 3 panel. `scripts/make_figures.py`'a eklenecek.
+2. `faz-4-v2` ve `faz-4c-v3`'ü `seminar-paper`'a merge (kullanıcı onayıyla).
+3. Faz 5: makale (aşağıdaki plan v3'e göre sadeleştirilecek: v1/gatekeeper bölümleri yok).
+4. Sunum slaytları (önerilen akış: problem → kurulum (yukarıdaki paragraf) → tek grafik → dürüst kısım: R² neden 0.99,
+   ağır yükte neden kaybediyoruz).
+
+---
+
 ## 0. Bağlam
 
 Bu repo, *Computer Networks: Basic Protocols* dersinde dönem projesi olarak yapıldı ve 4 sayfalık
@@ -237,9 +279,9 @@ Detaylı bulgular (İngilizce, makaleye taşınabilir): [`results/v1_findings.md
   - [ ] **Abstract.** Sayılar Faz 3/4'ten; abartısız
   - [ ] **I. Introduction (+ Related Work).** Motivasyon, KDN, katkılar; related work: exact/ILP, heuristic, DRL, GNN/RouteNet, KDN uygulamaları
   - [ ] **II. Material and Methods.** Topoloji, SFC kataloğu, gecikme modeli (v1 ve v2), simülatör, veri üretimi, iki aşamalı model, aday üretimi, baseline ve ablasyonlar, değerlendirme protokolü ve istatistik
-  - [ ] **III. Experimental Results.** Sınıflandırıcı/regressor kalitesi, ana tablo, λ taraması, ablasyon, gatekeeper analizi, karar süresi
+  - [ ] **III. Experimental Results.** (v3'e göre güncel: v1 ve gatekeeper yok) regressor kalitesi, ana grafik (λ × σ), adaylardan seçme vs modelin kendisi yerleştirmesi, karar süresi
   - [ ] **IV. Conclusion (Future Work)**
-  - [ ] **V. Discussion.** v1'in neden ML'den fayda görmediği, oracle argümanı, tehditler (validity threats: tek topoloji, sentetik trafik, basit kuyruk modeli), etik ve tekrar üretilebilirlik notu
+  - [ ] **V. Discussion.** (v1 anlatılmayacak) R² neden 0.99 (sentetik etiket), miyopluk, aday kümesi tavanı, oracle argümanı, tehditler (validity threats: tek topoloji, sentetik trafik, basit kuyruk modeli), etik ve tekrar üretilebilirlik notu
   - [ ] **Acknowledgements.** Danışman; önceki ders projesinden türetildiği; (politika uygunsa) AI-araç beyanı
   - [ ] **References.** BibTeX (`refs.bib`), her kaynak tek tek doğrulanacak (DOI ve sayfa)
 - [ ] Literatür (doğrulanacak aday listesi; uydurma atıf olmaması için hepsi kontrol edilecek):
