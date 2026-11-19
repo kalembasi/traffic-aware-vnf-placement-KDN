@@ -243,6 +243,53 @@ class KDN3(CandidatePolicy):
         return cands[i]
 
 
+class GreedyModel(BasePlacement):
+    """v3.1: the model builds the placement. Each VNF goes to the feasible node with the lowest
+    propagation from the previous hop + predicted processing delay of the partial chain (+ egress for the last VNF).
+
+    ``scorer(graph, req, partials) -> processing delay of each partial placement``.
+    """
+    name = 'greedy-model'
+
+    def __init__(self, scorer):
+        self.scorer = scorer
+
+    def place(self, graph, req):
+        from src.sfc import VNF_REQUIREMENTS
+        dist, last, placed = graph.graph['dist'], len(req.chain) - 1, []
+
+        def sel(hops, state, i):
+            hops = list(hops)
+            if not hops:
+                return None
+            vnf = req.chain[i]
+            need = VNF_REQUIREMENTS[vnf]
+            parts = [PlacementResult(True, placed + [(h.node, vnf, need['cpu'], need['ram'])]) for h in hops]
+            proc = self.scorer(graph, req, parts)
+            score = [h.delay + p + (dist[h.node][req.dst] if i == last else 0.0) for h, p in zip(hops, proc)]
+            best = hops[int(np.argmin(score))]
+            placed.append((best.node, vnf, need['cpu'], need['ram']))
+            return best
+        return _chain(graph, req, sel)
+
+
+def kdn3_scorer(models_dir):
+    import xgboost as xgb
+    reg = xgb.XGBRegressor()
+    reg.load_model(os.path.join(models_dir, 'kdn3_regressor.json'))
+    reg.set_params(n_jobs=1)
+
+    def score(graph, req, parts):
+        net_rho = _net(graph)[0]
+        rows, owner = [], []
+        for i, p in enumerate(parts):
+            r = vnf_rows(graph, req, p, net_rho)
+            rows += r
+            owner += [i] * len(r)
+        return np.bincount(owner, weights=reg.predict(vnf_matrix(rows)), minlength=len(parts))
+    return score
+
+
 def build_policy(name, world, rng, models_dir=None, alpha_star=None):
     p = world.cfg.get('wake_up_penalty', WAKE_UP_PENALTY)   # v2: 1000 (not in config), v3: 0
     if name == 'greedy':
@@ -281,4 +328,12 @@ def build_policy(name, world, rng, models_dir=None, alpha_star=None):
         return ModelSelector(rng, world, models_dir, calibrated=True, wake_up_penalty=p)
     if name == 'kdn3':
         return KDN3(rng, models_dir, wake_up_penalty=p)
+    # --- v3.1 (addendum): the model builds the placement ---
+    if name == 'kdn3-greedy':
+        return GreedyModel(kdn3_scorer(models_dir))
+    if name == 'model-cal-greedy':
+        m = ModelSelector(rng, world, models_dir, calibrated=True, wake_up_penalty=p)
+        return GreedyModel(lambda g, req, parts: [m.predict(g, req, x) for x in parts])
+    if name == 'oracle-greedy':
+        return GreedyModel(lambda g, req, parts: [world.processing_delay(g, x, req) for x in parts])
     raise KeyError(name)

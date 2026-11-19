@@ -88,11 +88,19 @@ V3_HYPOTHESES = [('H1', 'kdn3', 'smart-load'), ('H2', 'kdn3', 'model-nom'), ('H3
 V3_REPORTED = [('gap', 'kdn3', 'oracle'), ('vs-smart', 'kdn3', 'smart')]
 
 
-def hypotheses_v3(runs):
+V31_HYPOTHESES = [('H5', 'kdn3-greedy', 'smart-load'), ('H6', 'kdn3-greedy', 'kdn3')]
+V31_REPORTED = [('gap-greedy', 'kdn3-greedy', 'oracle-greedy'), ('vs-model-cal-greedy', 'kdn3-greedy', 'model-cal-greedy')]
+
+
+def hypotheses_v31(runs):
+    return hypotheses_v3(runs, V31_HYPOTHESES + V31_REPORTED)
+
+
+def hypotheses_v3(runs, comparisons=None):
     """v3 protocol section 5: paired two-sided Wilcoxon over seeds per (sigma, lambda) cell,
     Holm across all cells of a hypothesis. Also reports kdn3-oracle and kdn3-smart (no test)."""
     rows = []
-    for hyp, a, b in V3_HYPOTHESES + V3_REPORTED:
+    for hyp, a, b in comparisons or V3_HYPOTHESES + V3_REPORTED:
         cells = []
         for (sigma, lam), g in runs.groupby(['sigma', 'lambda']):
             p = g.pivot(index='seed', columns='algorithm', values='lat_mean')

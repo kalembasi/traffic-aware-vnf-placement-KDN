@@ -67,6 +67,34 @@ def cmd_run(a):
     print(s.pivot(index='algorithm', columns='lambda', values='lat_mean_mean').round(2).to_string(), flush=True)
 
 
+GREEDY = ['kdn3-greedy', 'model-cal-greedy', 'oracle-greedy']
+
+
+def cmd_greedy(a):
+    """v3.1 addendum: the model builds the placement (main environments only)."""
+    from src.v2.experiment import run_grid
+    from src.v2.analysis import hypotheses_v31
+    from src.experiment import summarize_runs
+    allr = []
+    for n, sigma in MAIN.items():
+        _, models, out = paths(n)
+        with open(os.path.join(out, 'alpha_star.json')) as f:
+            alpha_star = json.load(f)['alpha_star']
+        t0 = time.time()
+        runs = run_grid(f'experiments/v3/env_{n}.json', GREEDY, EVAL['seeds'], LAMBDAS, 'test', HORIZON, WARMUP,
+                        models_dir=models, alpha_star=alpha_star, jobs=a.jobs)
+        runs.to_csv(os.path.join(out, 'runs_greedy.csv'), index=False)
+        both = pd.concat([pd.read_csv(os.path.join(out, 'runs.csv')), runs], ignore_index=True)
+        summarize_runs(both).to_csv(os.path.join(out, 'summary_with_greedy.csv'), index=False)
+        allr.append(both.assign(env=n, sigma=sigma))
+        print(f'[{n}] greedy: {time.time() - t0:.0f}s', flush=True)
+    h = hypotheses_v31(pd.concat(allr, ignore_index=True))
+    h.to_csv('results/v3/hypotheses_v31.csv', index=False)
+    with open('results/v3/hypotheses_v31.md', 'w') as f:
+        f.write('# v3.1 addendum (Holm across the 20 sigma x lambda cells per comparison)\n\n')
+        f.write(h.to_markdown(index=False, floatfmt='.4g') + '\n')
+
+
 def cmd_analyze(a):
     from src.v2.analysis import hypotheses_v3
     main = pd.concat([pd.read_csv(os.path.join(paths(n)[2], 'runs.csv')).assign(env=n, sigma=s)
@@ -97,8 +125,9 @@ def main():
     p = sub.add_parser('run'); p.add_argument('--name', required=True); p.add_argument('--env', required=True)
     p.add_argument('--jobs', type=int, default=10)
     sub.add_parser('analyze')
+    p = sub.add_parser('greedy'); p.add_argument('--jobs', type=int, default=11)
     a = ap.parse_args()
-    {'run': cmd_run, 'analyze': cmd_analyze}[a.cmd](a)
+    {'run': cmd_run, 'analyze': cmd_analyze, 'greedy': cmd_greedy}[a.cmd](a)
 
 
 if __name__ == '__main__':

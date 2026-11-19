@@ -59,7 +59,7 @@ def test_calibration_recovers_hidden_parameters(trained):
     assert m['model-cal']['vnf_r2'] > m['model-nom']['vnf_r2']
 
 
-@pytest.mark.parametrize('policy', ['model-nom', 'model-cal', 'kdn3', 'cands-prop'])
+@pytest.mark.parametrize('policy', ['model-nom', 'model-cal', 'kdn3', 'cands-prop', 'kdn3-greedy', 'model-cal-greedy', 'oracle-greedy'])
 def test_v3_selectors_conserve_resources(trained, policy):
     from src.v2.environment import V2Simulation
     from src.v2.experiment import policy_rng, world_for
