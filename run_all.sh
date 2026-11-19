@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Reproduce v1 (course report) pipeline end-to-end: telemetry -> training -> evaluation.
+# Reproduce the v1 (course report) pipeline end-to-end: telemetry -> training -> evaluation -> tests.
 set -euo pipefail
 cd "$(dirname "$0")"
 PY=${PY:-.venv/bin/python}
 SEED=${SEED:-2025}
-OUT=${OUT:-results/v1}
+OUT=results/v1
 
-mkdir -p "$OUT"
-"$PY" data_generator.py --seed "$SEED" --out data/telemetry_v1.csv --stats-out "$OUT/traffic_distributions.csv"
-"$PY" -m src.algorithms.xgboost --data data/telemetry_v1.csv --models-dir models --plots-dir "$OUT/training_plots" | tee "$OUT/training_metrics.txt"
-"$PY" evaluate_models.py --out-dir "$OUT"
+"$PY" -m scripts.generate_data --seed "$SEED" --out data/telemetry_v1.csv --stats-out "$OUT/traffic_distributions.csv"
+"$PY" -m scripts.train --data data/telemetry_v1.csv --models-dir models/v1 --plots-dir "$OUT/training_plots" > "$OUT/training_metrics.json"
+"$PY" -m scripts.evaluate --exp experiments/v1.json --out "$OUT"
+"$PY" -m pytest -q
