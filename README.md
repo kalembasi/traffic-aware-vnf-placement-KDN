@@ -31,13 +31,14 @@ python3 -m venv .venv
 
 ## Reproducing everything
 ```bash
-./run_all.sh    # download data -> 6 environments -> hypothesis tests -> figures -> tests   (~30 min, 12 cores)
+./run_all.sh    # download data -> 6 environments -> hypothesis tests -> data ablation -> figures -> tests   (~30 min, 12 cores)
 ```
 The individual steps:
 ```bash
 scripts/fetch_data.sh                          # public datasets into data/external (SHA256-checked)
 .venv/bin/python -m scripts.run run --name s05 # telemetry, training, alpha tuning, evaluation for one environment
 .venv/bin/python -m scripts.run analyze        # pre-registered hypothesis tests across environments
+.venv/bin/python -m scripts.ablation_data      # does the result depend on the KDN / Abilene traffic data? (~1 min)
 .venv/bin/python -m scripts.make_figures       # figures/
 .venv/bin/python -m pytest -q
 ```
@@ -54,7 +55,7 @@ src/
   policies.py     all placement policies (heuristics, candidate selectors, model-built placement, oracles)
   experiment.py   simulation grid, telemetry generation, model training and calibration
   analysis.py     summary tables and hypothesis tests
-scripts/          run.py (pipeline), make_figures.py, fetch_data.sh
+scripts/          run.py (pipeline), ablation_data.py (data ablation), make_figures.py, fetch_data.sh
 experiments/      protocol.md, environment configs (envs/), dataset checksums
 results/          findings.md, hypotheses.*, one folder per environment (runs, summaries, alpha tuning, model metrics)
 tests/            resource and load conservation, determinism, calibration, model policies

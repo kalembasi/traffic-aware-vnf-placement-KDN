@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeye genel bakış: ML ile VNF yerleştirme</title>
+<style>
+:root { --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --rule:#e4e3df; --blue:#2a78d6; --orange:#eb6834; --aqua:#1baf7a; }
+body { background:var(--surface); color:var(--ink); font:15px/1.65 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; margin:0; }
+main { max-width:860px; margin:0 auto; padding:32px 24px 80px; }
+h1 { font-size:26px; line-height:1.25; margin:0 0 6px; }
+h2 { font-size:20px; margin:44px 0 10px; padding-top:14px; border-top:1px solid var(--rule); }
+h3 { font-size:16px; margin:22px 0 6px; }
+.meta { color:var(--ink2); font-size:13px; }
+nav ol { columns:2; font-size:14px; padding-left:20px; }
+figure { margin:16px 0 22px; } figure img { max-width:100%; border:1px solid var(--rule); border-radius:6px; }
+figcaption { color:var(--ink2); font-size:13px; margin-top:6px; }
+table { border-collapse:collapse; font-size:13.5px; margin:10px 0 18px; width:100%; }
+th, td { border-bottom:1px solid var(--rule); padding:6px 8px; text-align:left; vertical-align:top; }
+thead th { color:var(--ink2); font-weight:600; }
+td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+tr.best td { font-weight:600; }
+.box { border-radius:4px; padding:10px 16px; margin:14px 0; }
+.info { background:#f3f2ef; border-left:4px solid var(--blue); }
+.warn { background:#fff6ef; border-left:4px solid var(--orange); }
+.ok { background:#effaf5; border-left:4px solid var(--aqua); }
+code { background:#f0efec; padding:1px 4px; border-radius:3px; font-size:13px; }
+pre { background:#f0efec; padding:10px 14px; border-radius:6px; overflow:auto; font-size:13px; line-height:1.5; }
+.tag { display:inline-block; font-size:12px; padding:0 6px; border-radius:3px; white-space:nowrap; }
+.real { background:#effaf5; color:#0d6b49; }
+.ours { background:#fff6ef; color:#9a3d12; }
+.sim { background:#eef4fc; color:#1d4f8f; }
+ol li, ul li { margin:4px 0; }
+.refs li { margin:6px 0; font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Projeye genel bakış: ML ile VNF yerleştirme</h1>
+<p class="meta">Sade sürüm. Sayıların hepsi <code>results/</code> altındaki CSV'lerden geliyor.
+Makalede yalnızca üç yöntem karşılaştırılıyor: greedy, smart ve kdn-greedy.</p>
+
+<nav><ol>
+<li><a href="#ozet">Tek paragrafta proje</a></li>
+<li><a href="#gercek">Ne gerçek, ne bizim varsayımımız?</a></li>
+<li><a href="#veri">Veriyi gözle gör</a></li>
+<li><a href="#istek">Bir istek baştan sona</a></li>
+<li><a href="#gecikme">Gecikme nasıl hesaplanıyor?</a></li>
+<li><a href="#model">Model: neyi öğreniyor?</a></li>
+<li><a href="#yontem">Karşılaştırılan üç yöntem</a></li>
+<li><a href="#sonuc">Sonuçlar</a></li>
+<li><a href="#sinir">Sınırlar</a></li>
+<li><a href="#referans">Referanslar</a></li>
+<li><a href="#repo">Repo ve çalıştırma</a></li>
+</ol></nav>
+
+<!-- ====================================================================== -->
+<h2 id="ozet">1. Tek paragrafta proje</h2>
+<p>Bir operatör ağına "trafiğimi NAT → Firewall → IDS'ten geçir" gibi servis istekleri geliyor. Ağın yöneticisi
+(<b>kontrolcü</b>) her bir yazılım ağ fonksiyonunu (<b>VNF</b>) hangi sunucuya koyacağına karar veriyor.
+Bazı sunucular yavaş, ama kontrolcü hangileri olduğunu bilmiyor. Soru şu:</p>
+<div class="box info"><b>Geçmiş ölçümlerden öğrenen bir model, yavaş sunucuları bulup basit bir kuraldan daha iyi
+yerleştirme yapabilir mi?</b></div>
+<p>Gerçek bir ağın (Abilene) topolojisi ve 2004 trafik kayıtları üzerinde bir simülatör kurduk. VNF gecikmesini tahmin
+eden bir XGBoost modeli eğittik ve bu modelle yerleştirme yapan yöntemi iki basit kuralla karşılaştırdık.
+<b>Sonuç:</b> ağ normal yükteyken (istekler neredeyse hiç reddedilmiyorken) model 3.4–4.6 ms (%13–22) daha hızlı
+yerleştirme yapıyor. Ağ kapasite sınırına dayandığında avantajı kayboluyor.</p>
+<p>Bu yaklaşımın adı <b>Knowledge-Defined Networking (KDN)</b> (Mestres et al., 2017). Fikir şu: kontrolcü ağdan
+ölçüm toplasın, makine öğrenmesiyle ağın nasıl davrandığını öğrensin, kararlarını buna göre versin. Bu çalışma
+bu fikrin küçük, simülasyonda yapılmış bir denemesi.</p>
+
+<!-- ====================================================================== -->
+<h2 id="gercek">2. Ne gerçek, ne bizim varsayımımız?</h2>
+<table>
+<thead><tr><th>Parça</th><th>Nereden geliyor</th><th>Durumu</th></tr></thead>
+<tbody>
+<tr><td>Ağ: 12 şehir, 15 bağlantı, şehirler arası mesafe</td><td>SNDlib Abilene topolojisi</td>
+<td><span class="tag real">gerçek veri</span> (bağlantı kapasitelerini ağ dolabilsin diye küçülttük)</td></tr>
+<tr><td>Ne zaman kaç istek gelir, hangi şehirden hangi şehre</td><td>Abilene trafik matrisleri (2004)</td>
+<td><span class="tag real">gerçek veriden türetildi</span> İsteklerin kendisi veride yok, biz üretiyoruz.</td></tr>
+<tr><td>Her isteğin paket/akış sayısı ve VNF'lere bindirdiği CPU yükü</td><td>KDN VNF ölçümleri (Mestres et al.)</td>
+<td><span class="tag real">gerçek ölçümden ödünç</span></td></tr>
+<tr><td>VNF tipleri (NAT, IDS…), zincirler, CPU/RAM ihtiyaçları</td><td>Ders projesinden; literatürde tipik örnekler</td>
+<td><span class="tag ours">bizim seçimimiz</span></td></tr>
+<tr><td>İşleme gecikmesi formülü</td><td>Kuyruk teorisinin standart formülü (M/M/1)</td>
+<td><span class="tag ours">formül standart, içindeki sayılar bizim</span></td></tr>
+<tr><td>Bazı sunucuların gizlice yavaş olması</td><td>Bizim varsayımımız</td>
+<td><span class="tag ours">bizim varsayımımız</span></td></tr>
+<tr><td>Yerleştirmeler ve ölçülen gecikmeler</td><td>Simülatör</td>
+<td><span class="tag sim">simülasyon çıktısı</span></td></tr>
+</tbody>
+</table>
+<div class="box warn"><b>En önemli dürüstlük noktası:</b> Veri setlerinin hiçbirinde VNF yerleştirme ya da gecikme ölçümü
+yok. Gecikmeler simülatörde, bizim formülümüzle hesaplanıyor. Model de bu formülü ve bizim koyduğumuz yavaş sunucuları
+öğreniyor. Bu yüzden çalışma "ML gerçek ağda gecikmeyi düşürür" demiyor; "gizli bir fark varsa ML onu bulup
+kullanabiliyor mu?" sorusunu kontrollü bir ortamda cevaplıyor.</div>
+
+<!-- ====================================================================== -->
+<h2 id="veri">3. Veriyi gözle gör</h2>
+
+<h3>3a. Abilene topolojisi</h3>
+<figure><img src="../figures/fig_topology.png" alt="Abilene topolojisi">
+<figcaption>Abilene: 2004'te ABD üniversitelerini bağlayan omurga ağ. Bağlantıların üzerindeki sayılar yol gecikmesi (ms):
+şehirler arası mesafe × ışığın fiberdeki hızı (km başına 5 µs).</figcaption></figure>
+
+<h3>3b. Abilene trafik matrisleri (gerçek, 2004)</h3>
+<p>Her 5 dakika için bir dosya var. Dosyadaki ham bir satır:</p>
+<pre>ATLAng_CHINng ( ATLAng CHINng ) 1 21.951643 UNLIMITED</pre>
+<p>Anlamı: <b>4 Mart 2004, 11:15'te, 5 dakika boyunca Atlanta'dan Chicago'ya ortalama 21.95 Mbps trafik gitti.</b></p>
+<p>Gerçekten bir matris: satır = kaynak şehir, sütun = hedef şehir, 12×12. Elimizde 48 096 tane var. Aynı anın
+4×4'lük bir parçası (Mbps):</p>
+<pre>kaynak \ hedef    ATLA    CHIN    LOSA    NYCM
+ATLA               0.0    22.0    10.3    13.8
+CHIN              28.6     0.0    29.4     3.8
+LOSA              17.6   199.1     0.0    44.3
+NYCM              31.1    67.9    72.2     0.0</pre>
+<ul>
+<li><b>Veride ne var:</b> yalnızca "hangi iki şehir arasında ne kadar Mbps gitti". Ölçüm NetFlow ile, 100 paketten 1'i
+örneklenerek yapılmış.</li>
+<li><b>Veride ne yok:</b> istek, VNF, yerleştirme, gecikme ve paket kaybı yok. NFV kavramı 2012'de ortaya çıktı.</li>
+<li><b>Eksik kısım:</b> 1 Mart – 10 Eylül arasındaki 194 günün 167'si var. 27 gün eksik (çoğu 15 Mart – 1 Nisan).
+Tamamen sıfır olan matris yok.</li>
+<li><b>Kim, ne için kullandı:</b> Yin Zhang ve arkadaşları, <i>Network Anomography</i> (IMC 2005). Ağdaki ani trafik
+sıçramalarının ve kesintilerin bu matrislerden otomatik tespit edilebildiğini gösterdiler. Veri seti sonra trafik
+matrisi tahmini çalışmalarında standart bir benchmark oldu.</li>
+<li><b>Biz neye kullandık:</b> tarihe göre ikiye böldük. <b>Mart–Haziran</b> eğitim simülasyonlarında,
+<b>Temmuz–Eylül</b> test simülasyonlarında kullanılıyor (bkz. §6).</li>
+</ul>
+
+<h3>3c. KDN VNF ölçümleri (gerçek, Mestres et al. 2017)</h3>
+<p>Mestres ve arkadaşları bir sanal makinede VNF çalıştırmış, kampüs ağından kaydedilmiş trafiği ona tekrar oynatmış ve
+CPU tüketimini ölçmüş. Her satır 20 saniyelik bir trafik parçası: 86 trafik özelliği ve ölçülen CPU. Biz yalnızca iki
+özelliği (paket ve akış sayısı) ve CPU'yu kullanıyoruz:</p>
+<pre>VNF        paket   akış   CPU
+Snort      48008   7371   210
+Firewall   48008   7371   414
+Snort      44551   5551   201
+Firewall   44551   5551   392</pre>
+<p>Aynı trafik iki VNF'ten geçmiş ve Firewall iki kat CPU harcamış. Veri setinde 3 VNF var: <b>Snort</b> (saldırı tespiti,
+1359 satır), <b>Firewall</b> (kural tabanlı güvenlik duvarı, 755 satır) ve <b>OVS</b> (yazılım switch, 1191 satır).</p>
+<p><b>Mestres'in gösterdiği:</b> bir VNF'in CPU tüketimi trafik özelliklerinden bir sinir ağıyla tahmin edilebiliyor.</p>
+<p><b>Biz neye kullandık:</b> Bir VNF'e sabit bir CPU ayrılır, ama gerçekte ne kadar harcadığı içinden geçen trafiğe
+bağlıdır. Bu ilişkiyi uydurmak yerine bu ölçümlerden aldık: çok paketli trafik daha çok CPU demek (ayrıntı §4).
+Ölçümlerdeki paket sayıları birbirine yakın (%90'ı 41 000–59 000 arası), bu yüzden harcanan CPU ortalamadan yalnızca
+±%10 kadar sapıyor. Bizim simülatörde bu sapmayı yalnızca paket sayısı belirliyor; akış sayısı modele girdi olarak
+veriliyor ama yükü etkilemiyor.</p>
+
+<!-- ====================================================================== -->
+<h2 id="istek">4. Bir istek baştan sona</h2>
+<div class="box info"><b>Gerçek hayatta "istek" nedir?</b> Tek bir kullanıcının tıklaması değil, iki şehir arasındaki
+toplu trafik için bir <b>servis siparişi</b>. Örnek: bir banka, Chicago şubesi için "güvenli internet" hizmeti alıyor.
+Orkestratör Firewall ve IDS'i bir sunucuya yerleştiriyor ve şubenin bütün trafiği bu zincirden geçiyor. Sipariş bitince
+VNF'ler kaldırılıyor.</div>
+
+<p><b>Kontrolcü kim?</b> Yerleştirme kararını veren yazılım. Gerçek hayatta bu bir SDN kontrolcüsü ya da NFV
+orkestratörü. Bizim kodda bir fonksiyon: isteği ve ağın o anki durumunu alıyor, her VNF için bir sunucu döndürüyor.
+§7'deki üç yöntem üç farklı kontrolcü.</p>
+
+<p>Simülatörde bir isteğin yolculuğu:</p>
+<ol>
+<li><b>Ne zaman gelir?</b> Abilene matrisi o anda ağın ne kadar yoğun olduğunu söylüyor. Yoğun saatte daha çok istek
+geliyor. Örnek: ABD'de öğleden sonra toplam trafik ~3370 Mbps, sabah 6'da ~2260 Mbps; öğleden sonra ~1.5 kat daha fazla
+istek geliyor.</li>
+<li><b>Hangi şehirden hangi şehre?</b> O anın matrisine göre çekiliyor. LOSA→CHIN 199 Mbps taşıyorsa, 3.8 Mbps taşıyan
+CHIN→NYCM'den çok daha sık seçiliyor.</li>
+<li><b>Hangi servis?</b> Üç tipten biri rastgele seçiliyor:
+<table>
+<thead><tr><th>Servis</th><th>VNF zinciri</th><th class="n">Bant genişliği</th></tr></thead>
+<tbody>
+<tr><td>Web</td><td>NAT → Firewall → TrafficMonitor</td><td class="n">10 Mbps</td></tr>
+<tr><td>VoIP</td><td>NAT → SBC → Firewall → IDS</td><td class="n">20 Mbps</td></tr>
+<tr><td>Video</td><td>NAT → DPI → VideoTranscoder</td><td class="n">50 Mbps</td></tr>
+</tbody>
+</table></li>
+<li><b>Trafiği nasıl?</b> Mestres'in Snort tablosundan bir satır çekiliyor; o satırın paket ve akış sayısı isteğe
+kopyalanıyor. Satır servise göre seçiliyor: Web'e paket sayısı en düşük üçte birlik dilimden (46 000'in altı), VoIP'e
+ortadaki dilimden, Video'ya en yüksek dilimden (50 000'in üstü). Trafik parçası gerçek; ağır servise ağır trafik
+vermek bizim seçimimiz.</li>
+<li><b>VNF'ler ne kadar CPU harcayacak?</b> Her VNF'e sabit bir CPU ayrılıyor (NAT 10, DPI 20, VideoTranscoder 30 …;
+<span class="tag ours">bizim seçimimiz</span>). Kabul/red kararı buna göre veriliyor. Gerçekte harcanan CPU ise trafiğe
+göre değişiyor: ayrılanın ~%60'ı × <b>r</b>. <b>r</b> Mestres ölçümlerinden geliyor.
+<br>Örnek: 55 000 paketlik bir Video isteği. DPI için Snort ölçümlerinde 55 000 pakete en yakın 5 satıra bakılıyor;
+CPU'ları 202–210, Snort'un tipik (medyan) CPU'su 198. Seçilen satır 208 ise r = 208 ÷ 198 ≈ 1.05 ve sunucuya
+0.6 × 20 × 1.05 ≈ 12.6 birim yük ekleniyor (100 üzerinden). Her VNF kendine en benzer ölçülmüş VNF'in verisine
+bakıyor (NAT ve Firewall → Firewall, IDS ve DPI → Snort, diğerleri → OVS). Az paketli bir Web isteğinde r 0.8–0.96'ya
+düşüyor.
+<br><b>Neden doğrudan bir CPU değeri vermiyoruz?</b> Kontrolcü karar anında paket sayısını görebilir (siparişin
+trafiği bilinir), ama VNF'in gerçekte ne kadar CPU harcayacağını göremez. ML gözüyle: paket sayısı girdi, gerçek CPU
+tüketimi gizli taraf. Mestres verisi bu ikisi arasındaki ilişkiyi uydurmak yerine gerçek ölçümden almamızı sağlıyor.</li>
+<li><b>Kontrolcü karar verir.</b> Her VNF için bir sunucu seçiyor. Yer yoksa (CPU, RAM ya da bant yetmiyorsa) istek
+reddediliyor.</li>
+<li><b>Simülatör gecikmeyi hesaplar</b> (§5). Kontrolcü bu hesabı göremiyor; simülatör "gerçek dünya" rolünü oynuyor.</li>
+<li><b>Süre dolar.</b> İstek 10–600 zaman birimi sonra bitiyor, sunucular boşalıyor.</li>
+</ol>
+<figure><img src="../figures/fig_traffic.png" alt="Trafik profili ve şehir çifti payları">
+<figcaption>Solda: ilk haftanın toplam trafiği (ortalamaya bölünmüş). İstek geliş hızı bu eğriyi izliyor. Sağda: hangi
+şehir çiftinin toplam trafiğin yüzde kaçını taşıdığı. İsteklerin kaynak ve hedef şehirleri bu paylara göre çekiliyor.</figcaption></figure>
+
+<!-- ====================================================================== -->
+<h2 id="gecikme">5. Gecikme nasıl hesaplanıyor?</h2>
+<p>Bir isteğin toplam gecikmesi iki parçadan oluşuyor:</p>
+<ul>
+<li><b>Yol gecikmesi:</b> trafiğin kaynak şehir → VNF'ler → hedef şehir yolunda geçirdiği süre. Kontrolcü bunu
+haritadan tam olarak biliyor.</li>
+<li><b>İşleme gecikmesi:</b> her VNF'in paketleri işlerken harcadığı süre. Kontrolcü bunu <b>bilmiyor</b>.</li>
+</ul>
+<p>Simülatör işleme gecikmesini şöyle hesaplıyor:</p>
+<pre>işleme gecikmesi = s × κ ÷ (1 − ρ)</pre>
+<ul>
+<li><b>s</b>: VNF'in boş ve normal hızdaki bir sunucuda harcadığı süre. NAT 0.5 ms, IDS 2 ms, VideoTranscoder 5 ms.
+<span class="tag ours">bizim seçimimiz</span></li>
+<li><b>κ</b>: sunucunun gizli yavaşlık çarpanı. 1 = normal, 2 = iki kat yavaş, 0.5 = iki kat hızlı.
+<span class="tag ours">bizim varsayımımız</span></li>
+<li><b>ρ</b>: sunucunun doluluğu, 0 (boş) ile 0.95 arası. Sunucu doldukça bölen küçülüyor ve gecikme hızla artıyor.</li>
+</ul>
+<p>Bu formül bizim icadımız değil. Kuyruk teorisinin klasik formülü (M/M/1, Kleinrock 1975) ve VNF yerleştirme
+çalışmalarında sık kullanılıyor. Biz bu formülü seçtik ve içindeki sayıları koyduk.</p>
+
+<h3>Gizli yavaşlık çarpanı (κ) nereden geliyor?</h3>
+<p>Veriden gelmiyor; bizim varsayımımız. Gerekçesi şu: gerçek veri merkezlerinde farklı nesil sunucular yan yana çalışır
+ve aynı VNF bazılarında daha yavaş koşar. Her şehre sabit bir çarpan verdik. Yayılımını <b>σ</b> ile ayarlıyoruz:</p>
+<ul>
+<li><b>σ = 0:</b> bütün sunucular aynı hızda (hepsinin κ'sı 1). Öğrenilecek gizli bir fark yok.</li>
+<li><b>σ = 1:</b> sunucular çok farklı. En hızlısı Indianapolis (0.18), en yavaşı Houston (5.65). Arada Atlanta 0.32,
+Los Angeles 0.58, New York 0.90, Chicago 2.25, Washington 3.16 gibi değerler var.</li>
+</ul>
+
+<h3>Örnek hesap</h3>
+<p>Eğitim tablosundan gerçek bir satır (σ = 1). Bir Video isteği geliyor:</p>
+<pre>NAT              → Houston    (κ = 5.65, doluluk 0.065):  0.5 × 5.65 ÷ (1 − 0.065) = 3.02 ms
+DPI              → Sunnyvale  (κ = 1.38, doluluk 0.127):  2   × 1.38 ÷ (1 − 0.127) = 3.15 ms
+VideoTranscoder  → Atlanta    (κ = 0.32, doluluk 0.188):  5   × 0.32 ÷ (1 − 0.188) = 1.95 ms</pre>
+<p>En ağır VNF (VideoTranscoder), hızlı Atlanta sunucusunda en hafif VNF'ten (NAT, yavaş Houston'da) daha kısa sürmüş.
+Model bu farkı öğrenmeye çalışıyor.</p>
+
+<!-- ====================================================================== -->
+<h2 id="model">6. Model: neyi öğreniyor?</h2>
+<div class="box info"><b>ML gözüyle tek cümle:</b> Simülatörde çok sayıda yerleştirme yapıp her VNF için "nereye kondu,
+sunucu ne kadar doluydu, trafik neydi → ne kadar gecikti" satırları topladık. XGBoost'u bu satırlardan VNF gecikmesini
+tahmin etmeye eğittik. Yerleştirme yaparken de her aday sunucu için bu tahmini kullandık.</div>
+
+<h3>Eğitim tablosu nasıl oluştu?</h3>
+<ol>
+<li>Simülatörü <b>Mart–Haziran 2004</b> trafiğiyle çalıştırdık.</li>
+<li>VNF'leri rastgeleleştirilmiş bir kural yerleştirdi. Amaç, farklı sunucuları farklı doluluklarda görmek.</li>
+<li>Simülatör her VNF'in gecikmesini §5'teki formülle hesapladı ve bir satır olarak yazdı.</li>
+<li>Sonuç: σ seviyesi başına 212 621 satır. 170 559 satır eğitime, 42 062 satır doğrulamaya ayrıldı (farklı simülasyon
+tekrarlarından).</li>
+</ol>
+<p>Yani evet, eğitimdeki yerleştirmeleri biz (simülatör) yaptık. Gerçek bir KDN kontrolcüsü bu tabloyu ağdan topladığı
+ölçümlerle doldururdu.</p>
+
+<h3>Girdiler ve hedef</h3>
+<ul>
+<li><b>Girdiler (8 tane):</b> hangi VNF, hangi sunucu, sunucunun o anki doluluğu, bu isteğin o sunucuya koyduğu VNF sayısı
+ve CPU miktarı, isteğin paket ve akış sayısı, ağın ortalama doluluğu. Hepsi karar anında görülebilen bilgiler.</li>
+<li><b>Hedef:</b> o VNF'in işleme gecikmesi (σ = 1'de ortalama 3.2 ms).</li>
+<li><b>Model:</b> XGBoost regresyon (150 ağaç, derinlik 5). Her σ için ayrı eğitiliyor.</li>
+</ul>
+<p>Model gizli κ değerlerini görmüyor, ama "sunucu kimliği" girdisi sayesinde hangi sunucunun yavaş olduğunu verilerden
+öğrenebiliyor.</p>
+
+<h3>Test nasıl yapıldı?</h3>
+<p>Simülatörü bu sefer <b>Temmuz–Eylül 2004</b> trafiğiyle çalıştırdık. Kararları §7'deki üç yöntem verdi ve simülatör
+gecikmeleri ölçtü. Tarih ayrımının tek işlevi, testteki istek akışının eğitimde görülenden farklı olması. Gecikmeler
+yine aynı formülden geldiği için bu ayrımı abartmamak gerek.</p>
+
+<h3>Model ne kadar iyi tahmin ediyor?</h3>
+<p>Doğrulama satırlarında R² = 0.997, ortalama mutlak hata 0.17 ms (σ = 1).</p>
+<div class="box warn"><b>R² neden bu kadar yüksek?</b> Hedef, gürültüsüz bir formülden geliyor ve model bu formülü geri
+öğreniyor. Gerçek ölçümler gürültülü olurdu. Bu sayı "model gerçek ağda da bu kadar iyi tahmin eder" demek değil.
+Asıl soru tahminin iyi olması değil, <b>tahminin yerleştirmeyi ne kadar iyileştirdiği</b>.</div>
+
+<!-- ====================================================================== -->
+<h2 id="yontem">7. Karşılaştırılan üç yöntem</h2>
+<table>
+<thead><tr><th>Yöntem</th><th>Nasıl karar veriyor</th><th>Ne biliyor</th></tr></thead>
+<tbody>
+<tr><td><b>greedy</b></td><td>Her VNF'i yeri olan ilk sunucuya koyuyor.</td><td>Sadece kapasite</td></tr>
+<tr><td><b>smart</b></td><td>Her VNF'i, bir önceki duraktan en kısa yolla ulaşılan sunucuya koyuyor.</td><td>Harita (yol gecikmeleri)</td></tr>
+<tr><td><b>kdn-greedy</b></td><td>Her VNF için yeri olan bütün sunucuları (en fazla 12) modele soruyor ("buraya koyarsam
+yol + işleme ne kadar sürer?") ve en kısa süreyi vereni seçiyor.</td><td>Harita + modelin öğrendikleri. <b>Bizim yöntemimiz.</b></td></tr>
+</tbody>
+</table>
+
+<h3>Deney</h3>
+<ul>
+<li><b>2 senaryo:</b> σ = 0 (sunucular eşit) ve σ = 1 (sunucular çok farklı).</li>
+<li><b>5 yük seviyesi:</b> istek geliş hızı λ = 0.02, 0.05, 0.1, 0.2, 0.4. Her seviyenin ağda ne anlama geldiği
+(smart yöntemiyle, 30 tekrarın ortalaması):
+<table>
+<thead><tr><th class="n">λ</th><th class="n">Sunucuların ortalama doluluğu</th><th class="n">Büyük bir VNF daha alamayan sunucu</th>
+<th class="n">Kabul edilen istek</th><th>Durum</th></tr></thead>
+<tbody>
+<tr><td class="n">0.02</td><td class="n">%23</td><td class="n">12'de 1</td><td class="n">%99.6</td><td>normal yük</td></tr>
+<tr><td class="n">0.05</td><td class="n">%55</td><td class="n">12'de 5</td><td class="n">%97</td><td>normal yük</td></tr>
+<tr><td class="n">0.1</td><td class="n">%82</td><td class="n">12'de 9</td><td class="n">%78</td><td>sınıra yakın</td></tr>
+<tr><td class="n">0.2</td><td class="n">%92</td><td class="n">12'de 11</td><td class="n">%48</td><td>kapasite sınırında</td></tr>
+<tr><td class="n">0.4</td><td class="n">%96</td><td class="n">12'de 12</td><td class="n">%28</td><td>kapasite sınırında</td></tr>
+</tbody>
+</table>
+"Büyük bir VNF daha alamayan" = boş CPU'su 30'un altına inmiş (VideoTranscoder 30 CPU istiyor). Gerçek bir operatör
+ağını genellikle üst iki satırdaki gibi işletir: yoğun saatlere ve arızalara pay bırakır, istekleri geri çevirmeye
+başlamadan kapasite ekler. Alt satırlar ağın taşma noktasını gösteren bir stres testi.</li>
+<li><b>30 tekrar:</b> her durum 30 farklı rastgele başlangıçla çalıştırıldı. Aynı tekrarda üç yöntem de tıpatıp aynı
+istekleri görüyor.</li>
+<li><b>Ölçüt:</b> kabul edilen isteklerin ortalama uçtan uca gecikmesi (ms). Ayrıca kabul oranı ve karar süresi.</li>
+</ul>
+
+<!-- ====================================================================== -->
+<h2 id="sonuc">8. Sonuçlar</h2>
+<figure><img src="../figures/fig_results.png" alt="Ana sonuç grafiği: üç yöntemin ortalama gecikmesi">
+<figcaption>Kabul edilen isteklerin ortalama gecikmesi (30 tekrarın ortalaması; çizgi etrafındaki ince gölge %95 güven
+aralığı). Solda sunucular eşit, sağda bazıları çok yavaş. Normal yükte (soldaki iki nokta) model, smart'tan 3.4–4.6 ms
+daha hızlı. Sağdaki iki noktada ağ kapasite sınırında.</figcaption></figure>
+
+<table>
+<thead><tr><th>Senaryo</th><th>Yöntem</th><th class="n">λ = 0.02</th><th class="n">0.05</th><th class="n">0.1</th><th class="n">0.2</th><th class="n">0.4</th></tr></thead>
+<tbody>
+<tr><td>σ = 0</td><td>greedy</td><td class="n">29.68</td><td class="n">36.15</td><td class="n">40.52</td><td class="n">42.03</td><td class="n">40.51</td></tr>
+<tr><td>(sunucular eşit)</td><td>smart</td><td class="n">18.33</td><td class="n">21.53</td><td class="n">26.33</td><td class="n">28.67</td><td class="n">28.24</td></tr>
+<tr class="best"><td></td><td>kdn-greedy</td><td class="n">17.59</td><td class="n">20.91</td><td class="n">25.89</td><td class="n">28.43</td><td class="n">28.04</td></tr>
+<tr><td>σ = 1</td><td>greedy</td><td class="n">33.29</td><td class="n">41.83</td><td class="n">44.71</td><td class="n">45.72</td><td class="n">43.36</td></tr>
+<tr><td>(sunucular çok farklı)</td><td>smart</td><td class="n">21.45</td><td class="n">25.65</td><td class="n">30.82</td><td class="n">32.52</td><td class="n">31.07</td></tr>
+<tr class="best"><td></td><td>kdn-greedy</td><td class="n">16.82</td><td class="n">22.28</td><td class="n">30.35</td><td class="n">33.50</td><td class="n">31.76</td></tr>
+</tbody>
+</table>
+<p class="meta">Ortalama gecikme (ms), 30 tekrar. Kabul oranı smart ve kdn-greedy'de neredeyse aynı (λ sırasıyla ~%99,
+~%96, ~%78, ~%48, ~%28). greedy orta yükte daha fazla isteği reddediyor (λ = 0.05'te %88).</p>
+
+<h3>Üç bulgu</h3>
+<ol>
+<li><b>Normal yükte model kazandırıyor ve kazanç sunucular arasındaki farkla büyüyor.</b> λ = 0.02 ve 0.05'te
+kdn-greedy, smart'tan σ = 0'da 0.6–0.7 ms, σ = 1'de <b>3.4–4.6 ms (%13–22)</b> daha hızlı. λ = 0.1'de kazanç 0.5 ms'ye
+iniyor. σ = 0'daki küçük kazanç, modelin sunucu doluluğunu da görmesinden geliyor; smart yalnızca yola bakıyor.</li>
+<li><b>Ağ kapasite sınırındayken kazanç yok.</b> σ = 1'de, λ ≥ 0.2'de (isteklerin yarısından fazlası reddedilirken)
+kdn-greedy, smart'tan 0.7–1.0 ms daha yavaş. Sebep tahmin hatası değil: model her isteği tek başına en hızlı sunucuya
+koyuyor, hızlı sunucular dolunca sonraki isteklere yer kalmıyor. Gerçek gecikmeyi tam bilen bir kontrolcü de aynı
+sonucu alıyor; yani sorun modelde değil, "her isteği tek tek en iyi yere koy" yaklaşımında. Pratikte bir operatör
+ağını bu bölgede işletmez, kapasite ekler.</li>
+<li><b>greedy her durumda açık ara en kötü.</b> Yola bakmadığı için trafik dolambaçlı yollardan gidiyor.</li>
+</ol>
+<p><b>Bedeli:</b> kdn-greedy karar başına 3–9 ms harcıyor, smart 0.4 ms'nin altında. Sunucu sayısı arttıkça bu süre de
+artar.</p>
+
+<h3>Sağlamlık kontrolü: sonuç trafik verisine bağlı mı?</h3>
+<p>İki gerçek trafik verisini ayrı ayrı ve birlikte çıkarıp σ = 1 deneyini tekrarladık (30 tekrar). Mestres yükleri
+yerine her VNF sabit yük bindiriyor (r = 1); Abilene matrisleri yerine istekler sabit hızla ve rastgele şehir
+çiftleri arasında geliyor. Modeli her seferinde yeniden eğitmemek için kdn-greedy yerine gerçek gecikmeyi bilen
+oracle-greedy kullanıldı; asıl deneyde ikisinin sonucu en fazla 0.2 ms farklı.</p>
+<table>
+<thead><tr><th>Smart'a göre kazanç (ms)</th><th class="n">λ = 0.02</th><th class="n">0.05</th><th class="n">0.1</th><th class="n">0.2</th><th class="n">0.4</th></tr></thead>
+<tbody>
+<tr><td>Gerçek verilerle</td><td class="n">4.6</td><td class="n">3.4</td><td class="n">0.4</td><td class="n">−0.8</td><td class="n">−0.8</td></tr>
+<tr><td>Mestres yerine sabit yük</td><td class="n">4.5</td><td class="n">3.2</td><td class="n">0.3</td><td class="n">−0.8</td><td class="n">−0.6</td></tr>
+<tr><td>Abilene matrisi yerine sabit hız + rastgele şehir çifti</td><td class="n">5.0</td><td class="n">3.3</td><td class="n">−0.1</td><td class="n">−1.1</td><td class="n">−0.7</td></tr>
+<tr><td>İkisi de yok</td><td class="n">4.9</td><td class="n">3.2</td><td class="n">−0.2</td><td class="n">−1.0</td><td class="n">−0.7</td></tr>
+</tbody>
+</table>
+<p>Mestres verisi çıkınca kazanç en fazla 0.2 ms, Abilene matrisleri de çıkınca en fazla 0.6 ms değişiyor; sonucun
+yönü hiçbir satırda değişmiyor. Yani kazancı trafik verisi değil, sunucular arasındaki gizli hız farkı ve şehirler arası
+mesafe belirliyor. Gerçek trafik verileri simülasyonu gerçekçi yapıyor, ama sonucu taşıyan onlar değil.</p>
+
+<!-- ====================================================================== -->
+<h2 id="sinir">9. Sınırlar</h2>
+<div class="box ok"><b>Gösteriyor:</b> Sunucular arasında gizli ama öğrenilebilir bir fark varsa, ölçümlerden öğrenen bir
+model bu farkı yakalıyor ve ağ normal yükteyken yerleştirmeyi belirgin şekilde iyileştiriyor (3.4–4.6 ms).</div>
+<div class="box warn"><b>Göstermiyor:</b>
+<ul>
+<li>Gecikmeler gerçek ölçüm değil, bizim formülümüzden geliyor. Gerçek ölçümlerle hem tahmin hem kazanç daha düşük olabilir.</li>
+<li>Yavaş sunucular bizim varsayımımız. Kazancın büyüklüğü bu varsayıma bağlı: fark yoksa 0.7 ms, büyük fark varsa 4.6 ms.</li>
+<li>Tek bir ağ var (12 şehir). Daha büyük ağlarda sonuç ve karar süresi farklı olabilir.</li>
+<li>Gerçek trafik verileri (Abilene matrisleri, Mestres ölçümleri) sonucu neredeyse hiç değiştirmiyor (§8, sağlamlık
+kontrolü). "Gerçek veriye dayalı" vurgusu yapılmamalı.</li>
+<li>Her istek kendi VNF kopyalarını alıyor. Gerçek sistemlerdeki VNF paylaşımı ve ölçekleme modelde yok.</li>
+<li>Model bir kez eğitiliyor ve sonra güncellenmiyor.</li>
+<li>Ağ kapasite sınırındayken kazanç yok (yaklaşık 1 ms kayıp var). Bunu azaltmak için gelecekteki istekleri de hesaba
+katan bir yöntem gerekir (ör. pekiştirmeli öğrenme); bu çalışmanın kapsamı dışında. Pratikte bu bölgede operatörün
+asıl çaresi kapasite eklemek.</li>
+<li>kdn-greedy ilk denemelerden sonra tasarlandı. İlk sürümde model yalnızca hazır bir aday listesinden seçiyordu ve
+daha az kazandırıyordu. Bu makalede açıkça yazılmalı.</li>
+</ul></div>
+
+<!-- ====================================================================== -->
+<h2 id="referans">10. Referanslar</h2>
+<ol class="refs">
+<li>A. Mestres et al., "Knowledge-Defined Networking," <i>ACM SIGCOMM Computer Communication Review</i>, 47(3), 2017.
+— KDN fikri ve VNF CPU ölçüm veri seti.</li>
+<li>D. D. Clark, C. Partridge, J. C. Ramming, J. T. Wroclawski, "A Knowledge Plane for the Internet," <i>ACM SIGCOMM</i>, 2003.
+— KDN'in dayandığı "knowledge plane" fikri.</li>
+<li>S. Orlowski, R. Wessäly, M. Pióro, A. Tomaszewski, "SNDlib 1.0 — Survivable Network Design Library," <i>Networks</i>, 55(3), 2010.
+— Abilene topolojisi ve trafik matrislerinin indirildiği kütüphane.</li>
+<li>Y. Zhang, Z. Ge, A. Greenberg, M. Roughan, "Network Anomography," <i>ACM/USENIX IMC</i>, 2005.
+— Abilene trafik matrislerinin kaynağı.</li>
+<li>L. Kleinrock, <i>Queueing Systems, Volume 1: Theory</i>, Wiley, 1975. — İşleme gecikmesi formülü (M/M/1).</li>
+<li>T. Chen, C. Guestrin, "XGBoost: A Scalable Tree Boosting System," <i>KDD</i>, 2016. — Gecikme modeli.</li>
+</ol>
+<p class="meta">Makaleye girmeden önce her kaynak DOI ve sayfa bilgisiyle ayrıca doğrulanacak.</p>
+
+<!-- ====================================================================== -->
+<h2 id="repo">11. Repo ve çalıştırma</h2>
+<pre>src/
+  sfc.py          servis tipleri ve VNF'ler
+  data.py         SNDlib ve KDN veri setlerini okuyan fonksiyonlar
+  environment.py  simülatör: ağ, istek akışı, gizli yük ve gecikme
+  placement.py    ortak yerleştirme kodu: kapasite kontrolü, yol bulma, ayır/serbest bırak
+  features.py     modelin girdileri
+  policies.py     yöntemler (greedy, smart, kdn-greedy ve repodaki diğerleri)
+  experiment.py   deney, eğitim tablosu üretimi, model eğitimi
+  analysis.py     özet tablolar
+scripts/          run.py (deney hattı), ablation_data.py (sağlamlık kontrolü), make_figures.py, fetch_data.sh
+results/          her senaryo için sonuç CSV'leri ve findings.md
+tests/            simülatör ve yöntemler için testler</pre>
+<pre>python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+./run_all.sh     # veriyi indir → simülasyonlar → figürler → testler  (~30 dk, 12 çekirdek)</pre>
+<p>Her koşu sabit bir rastgele tohumla (seed) yapılıyor; karar süresi dışında bütün sonuçlar her çalıştırmada birebir
+aynı çıkıyor.</p>
+<p class="meta">Repoda makalede kullanılmayan ek deneyler de var (başka yöntemler, ara σ değerleri, farklı gecikme
+formülü). Ayrıntıları <code>results/findings.md</code>'de.</p>
+
+</main>
+</body>
+</html>

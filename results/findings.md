@@ -146,3 +146,11 @@ Each cell is the mean paired difference in ms; * means Holm p < 0.05 across the 
    including the oracles. Each request is optimised on its own, without regard to the requests that follow.
 4. **The gain from learning is real but confined to light load.** It grows with heterogeneity: at σ = 1, λ = 0.02,
    kdn-greedy is 4.5 ms faster than tuned smart-load, and kdn's p95 is 9–11 ms lower than smart's and smart-load's.
+
+## 8. Data ablation (`scripts/ablation_data.py`, `results/ablation_data.md`)
+σ = 1, 30 test seeds; oracle-greedy stands in for kdn-greedy (they agree within 0.2 ms on the base world).
+Removing the KDN CPU measurements (every load factor r = 1) changes the smart − oracle-greedy gain by at most
+0.19 ms; also replacing the Abilene matrices by a constant rate and uniform OD pairs changes it by at most 0.58 ms
+(at λ = 0.1). The sign of the gain never flips. The KDN load factor r stays within about 0.9–1.1 because the KDN
+batches have similar packet counts. The result is carried by the hidden node speeds κ and the topology, not by
+the traffic data.
