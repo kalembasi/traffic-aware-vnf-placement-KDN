@@ -1,11 +1,10 @@
-*/__pycache__/
+__pycache__/
 *.pyc
-*.vscode/
-*.ipynb_checkpoints
-*.log
+.pytest_cache/
+.vscode/
+.venv/
+/data/
 /models/
-*.csv
-/images/
-/results/
+rollout.md
 Knowledge-Defined Networking.md
 paper*
