@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Download the public datasets used by v2 into data/external and verify their checksums.
-#   SNDlib (Orlowski et al., 2010): Abilene/GEANT topologies, Abilene 5-min traffic matrices (Zhang)
+# Download the public datasets into data/external and verify their checksums.
+#   SNDlib (Orlowski et al., 2010): Abilene topology and 5-min traffic matrices (Zhang)
 #   KDN training datasets (Mestres et al., 2017): VNF CPU consumption vs traffic features
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -10,7 +10,6 @@ S=https://sndlib.put.poznan.pl/download
 K=https://knowledgedefinednetworking.org/data
 get() { [ -s "$D/$2" ] || curl -fsSL -m 600 -o "$D/$2" "$1"; }
 get "$S/sndlib-networks-native/abilene.txt" sndlib/abilene.txt
-get "$S/sndlib-networks-native/geant.txt" sndlib/geant.txt
 get "$S/directed-abilene-zhang-5min-over-6months-ALL-native.tgz" sndlib/abilene_tm.tgz
 for f in snort firewall ovs; do get "$K/$f.zip" "kdn_vnf/$f.zip"; done
 (cd "$D" && sha256sum -c ../../experiments/external_data.sha256)

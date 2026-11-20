@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Reproduce the v1 (course report) pipeline end-to-end: telemetry -> training -> evaluation -> tests.
+# Full pipeline: public data -> 6 environments (telemetry, training, alpha tuning, evaluation)
+# -> hypothesis tests -> figures -> tests.  About 30 min on 12 cores.
 set -euo pipefail
 cd "$(dirname "$0")"
 PY=${PY:-.venv/bin/python}
-SEED=${SEED:-2025}
-OUT=results/v1
 
-"$PY" -m scripts.generate_data --seed "$SEED" --out data/telemetry_v1.csv --stats-out "$OUT/traffic_distributions.csv"
-"$PY" -m scripts.train --data data/telemetry_v1.csv --models-dir models/v1 --plots-dir "$OUT/training_plots" > "$OUT/training_metrics.json"
-"$PY" -m scripts.evaluate --exp experiments/v1.json --out "$OUT"
+scripts/fetch_data.sh
+for env in s0 s025 s05 s1 s05_linear s05_perm2; do
+  "$PY" -m scripts.run run --name "$env"
+done
+"$PY" -m scripts.run analyze
+"$PY" -m scripts.make_figures
 "$PY" -m pytest -q

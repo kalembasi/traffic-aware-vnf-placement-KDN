@@ -1,4 +1,4 @@
-# Tested with Python 3.14 (Linux). v1 results reproduced bit-exactly for Greedy/Smart with these pins.
+# Tested with Python 3.14 (Linux).
 matplotlib==3.11.2
 networkx==3.7
 numpy==2.5.5
@@ -7,7 +7,5 @@ scikit-learn==1.9.1
 scipy==1.18.1
 simpy==4.1.2
 xgboost==3.4.1
-seaborn
+tabulate==0.10.0
 pytest
-ipykernel
-tabulate

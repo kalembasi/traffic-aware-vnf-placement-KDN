@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 
@@ -8,12 +7,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.chdir(ROOT)
 
-
-@pytest.fixture
-def config():
-    with open(os.path.join(ROOT, 'config', 'config.json')) as f:
-        return json.load(f)
-
-
-V1_MODELS = os.path.join(ROOT, 'models', 'v1')
-has_v1_models = os.path.exists(os.path.join(V1_MODELS, 'kdn_regressor.json'))
+needs_data = pytest.mark.skipif(not os.path.exists('data/external/sndlib/abilene.txt'),
+                                reason='run scripts/fetch_data.sh first')
+S0, S05, S1 = 'experiments/envs/s0.json', 'experiments/envs/s05.json', 'experiments/envs/s1.json'

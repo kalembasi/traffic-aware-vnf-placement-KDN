@@ -1,9 +1,17 @@
-import random
+import pytest
 
-from src.algorithms.greedy import GreedyPlacement
 from src.placement import ResourceState, build_chain, commit, release, route
-from src.sfc import SFC_CODES, SFCRequest
-from src.topology import create_topology
+from src.policies import Greedy
+from tests.conftest import S0, needs_data
+
+pytestmark = needs_data
+
+
+def _world_and_requests(n=30):
+    from src.experiment import world_for
+    w = world_for(S0)
+    sched, _ = w.schedule('train', 1, 0.2, 2000)
+    return w, [x.request for x in sched[:n]]
 
 
 def snapshot(g):
@@ -11,40 +19,39 @@ def snapshot(g):
             {(u, v): g[u][v]['bandwidth'] for u, v in g.edges})
 
 
-def test_build_chain_does_not_mutate_graph(config):
-    random.seed(0)
-    g = create_topology(config)
+def test_build_chain_does_not_mutate_graph():
+    w, reqs = _world_and_requests(1)
+    g = w.build_graph()
     before = snapshot(g)
-    res = build_chain(g, ['NAT', 'DPI', 'VideoTranscoder'], 50)
+    res = build_chain(g, reqs[0])
     assert res.success and snapshot(g) == before
+    assert res.delay >= g.graph['dist'][reqs[0].src][reqs[0].dst] - 1e-12   # detour through the VNFs
 
 
-def test_commit_release_roundtrip(config):
-    random.seed(0)
-    g = create_topology(config)
+def test_commit_release_roundtrip():
+    w, reqs = _world_and_requests()
+    g = w.build_graph()
     before = snapshot(g)
-    algo = GreedyPlacement()
     results = []
-    for i in range(30):
-        r = algo.place(g, SFCRequest(i, 'VoIP', 0.0, 10))
+    for req in reqs:
+        r = Greedy().place(g, req)
         if r.success:
             commit(g, r)
             results.append(r)
-    assert snapshot(g) != before
+    assert results and snapshot(g) != before
     for r in results:
         release(g, r)
-    assert snapshot(g) == before
+    assert all(abs(a - b) < 1e-9 for a, b in zip(snapshot(g)[1].values(), before[1].values()))
+    assert snapshot(g)[0] == before[0]
 
 
-def test_route_respects_bandwidth(config):
-    random.seed(0)
-    g = create_topology(config)
+def test_route_respects_bandwidth():
+    w, _ = _world_and_requests(0)
+    g = w.build_graph()
     st = ResourceState(g)
-    edges, _ = route(st, 'SEAT', 'NYCG', 50)
-    st.reserve_path(edges, g[edges[0][0]][edges[0][1]]['bandwidth'] - 10)  # leave 10 on the path
-    assert route(st, 'SEAT', 'NYCG', 50) is None
-    assert route(st, 'SEAT', 'NYCG', 10) is not None
-
-
-def test_sfc_codes_match_v1_label_encoder():
-    assert SFC_CODES == {'Video': 0, 'VoIP': 1, 'Web': 2}
+    src, dst = 'STTLng', 'NYCMng'
+    edges, delay = route(st, src, dst, 50)
+    assert delay == pytest.approx(g.graph['dist'][src][dst])
+    st.reserve_path(edges, min(g[u][v]['bandwidth'] for u, v in edges) - 10)   # leave 10 on the bottleneck
+    assert route(st, src, dst, 50) is None
+    assert route(st, src, dst, 10) is not None

@@ -1,6 +1,5 @@
 """SFC catalogue and request model."""
 from dataclasses import dataclass
-from typing import Optional
 
 VNF_REQUIREMENTS = {
     'NAT': {'cpu': 10, 'ram': 5},
@@ -24,9 +23,7 @@ SFC_BANDWIDTH = {
     'Video': 50
 }
 
-# Integer encoding of SFC types used as an ML feature.
-# Alphabetical order, identical to the sklearn LabelEncoder used in v1 (Video=0, VoIP=1, Web=2).
-SFC_CODES = {name: i for i, name in enumerate(sorted(SFC_CATALOG))}
+SFC_CPU = {t: sum(VNF_REQUIREMENTS[v]['cpu'] for v in c) for t, c in SFC_CATALOG.items()}
 
 
 @dataclass
@@ -36,10 +33,10 @@ class SFCRequest:
     sfc_type: str
     arrival: float
     duration: float
-    src: Optional[str] = None   # ingress node (unused by the v1 latency model)
-    dst: Optional[str] = None   # egress node (unused by the v1 latency model)
-    features: Optional[dict] = None  # observable traffic features (v2: packets, flows)
-    hidden: Optional[dict] = None    # ground truth hidden from policies (v2: relative VNF loads)
+    src: str                  # ingress node
+    dst: str                  # egress node
+    features: dict            # observable traffic features: packets, flows
+    hidden: dict              # ground truth hidden from policies: relative load r of every VNF
 
     @property
     def chain(self):

@@ -1,17 +1,10 @@
-*/__pycache__/
 __pycache__/
 *.pyc
-*.vscode/
-*.ipynb_checkpoints
-*.log
+.pytest_cache/
+.vscode/
 .venv/
-/models/
 /data/
-/logs/
-/images/
-/telemetry_data.csv
-# Raw run outputs are ignored; aggregated result tables (csv/md) and figures are tracked
-/results/**/requests.csv.gz
-/results/**/training_plots/
+/models/
+rollout.md
 Knowledge-Defined Networking.md
 paper*

@@ -1,12 +1,10 @@
 """Shared placement core: tentative resource accounting, routing, chain construction, commit/release.
 
-All placement algorithms are expressed as *per-VNF host ordering + selection rule* on top of
-``build_chain``. Feasibility checks, routing, bandwidth accounting and rollback live only here.
+Every policy is expressed as a *per-VNF host ordering + selection rule* on top of ``build_chain``.
+Feasibility checks, routing, bandwidth accounting and rollback live only here.
 """
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, List, Optional, Tuple
-
-import networkx as nx
 
 from src.sfc import VNF_REQUIREMENTS
 
@@ -45,7 +43,7 @@ class ResourceState:
 
 @dataclass
 class Hop:
-    """One feasible host for the next VNF, together with the route from the previous VNF."""
+    """One feasible host for the next VNF, together with the route from the previous hop."""
     node: str
     edges: List[Edge]
     delay: float
@@ -55,51 +53,37 @@ class Hop:
 class PlacementResult:
     success: bool
     placements: list = field(default_factory=list)   # [(node, vnf, cpu, ram)]
-    paths: list = field(default_factory=list)        # [[(u, v), ...]] non-empty inter-VNF segments
-    delay: float = 0.0                                # latency used for metrics (v1: inter-VNF propagation)
+    paths: list = field(default_factory=list)        # [[(u, v), ...]] non-empty route segments
+    delay: float = 0.0                                # propagation delay; the simulation adds processing delay
     bw: float = 0.0
-    reason: Optional[str] = None                      # 'gate' | 'infeasible' when not successful
-    info: dict = field(default_factory=dict)          # algorithm-specific diagnostics
+    reason: Optional[str] = None                      # 'infeasible' when not successful
+    info: dict = field(default_factory=dict)          # policy-specific diagnostics
 
     @property
     def nodes(self):
         return [p[0] for p in self.placements]
 
 
-def route(state: ResourceState, src, dst, bw, weight=None):
-    """Shortest path from src to dst (hop count when ``weight`` is None, as in v1).
+def route(state: ResourceState, src, dst, bw):
+    """Delay-weighted shortest path from src to dst (precomputed in ``graph.graph['paths']``).
 
-    If ``graph.graph['sp_cache'][weight]`` holds precomputed all-pairs paths (static weights, v2),
-    they are used instead of a fresh search. Returns (edges, delay) or None if any edge lacks
-    ``bw`` free bandwidth or no path exists.
+    Returns (edges, delay) or None if any edge lacks ``bw`` free bandwidth.
     """
     if src == dst:
         return [], 0.0
-    cache = state.graph.graph.get('sp_cache', {}).get(weight)
-    if cache is not None:
-        path = cache.get(src, {}).get(dst)
-        if path is None:
-            return None
-    else:
-        try:
-            path = nx.shortest_path(state.graph, source=src, target=dst, weight=weight)
-        except nx.NetworkXNoPath:
-            return None
+    path = state.graph.graph['paths'][src][dst]
     edges = list(zip(path[:-1], path[1:]))
     if any(state.free_bw(u, v) < bw for u, v in edges):
         return None
     return edges, sum(state.graph[u][v]['delay'] for u, v in edges)
 
 
-def feasible_hosts(state: ResourceState, vnf, prev_node, bw, node_order: Iterable[str], weight=None):
+def feasible_hosts(state: ResourceState, vnf, prev_node, bw, node_order: Iterable[str]):
     """Yield every node (in ``node_order``) that can host ``vnf`` and be reached from ``prev_node``."""
     req = VNF_REQUIREMENTS[vnf]
     for node in node_order:
         if state.free_cpu(node) >= req['cpu'] and state.free_ram(node) >= req['ram']:
-            if prev_node is None:
-                yield Hop(node, [], 0.0)
-                continue
-            r = route(state, prev_node, node, bw, weight)
+            r = route(state, prev_node, node, bw)
             if r is not None:
                 yield Hop(node, r[0], r[1])
 
@@ -118,35 +102,33 @@ def first_hop(hops, state, i):
     return next(iter(hops), None)
 
 
-def build_chain(graph, chain, bw, select: Selector = first_hop, order: Ordering = graph_order,
-                src=None, dst=None, weight=None) -> PlacementResult:
-    """Place ``chain`` VNF by VNF on a tentative overlay. Does NOT modify ``graph``.
+def build_chain(graph, req, select: Selector = first_hop, order: Ordering = graph_order) -> PlacementResult:
+    """Route ``req`` from its ingress through its VNFs (placed one by one) to its egress.
 
-    v1: ``src``/``dst`` None and hop-count routing. v2: the chain is routed from the ingress
-    ``src`` through the VNFs to the egress ``dst``; ``delay`` is the total propagation delay.
+    Works on a tentative overlay and does NOT modify ``graph``. ``delay`` is the total propagation delay.
     """
     state = ResourceState(graph)
-    placements, paths, delay, prev = [], [], 0.0, src
-    for i, vnf in enumerate(chain):
-        hop = select(feasible_hosts(state, vnf, prev, bw, order(state, prev, i), weight), state, i)
+    bw = req.bandwidth
+    placements, paths, delay, prev = [], [], 0.0, req.src
+    for i, vnf in enumerate(req.chain):
+        hop = select(feasible_hosts(state, vnf, prev, bw, order(state, prev, i)), state, i)
         if hop is None:
             return PlacementResult(False, bw=bw, reason='infeasible')
-        req = VNF_REQUIREMENTS[vnf]
-        state.reserve_node(hop.node, req['cpu'], req['ram'])
+        need = VNF_REQUIREMENTS[vnf]
+        state.reserve_node(hop.node, need['cpu'], need['ram'])
         state.reserve_path(hop.edges, bw)
-        placements.append((hop.node, vnf, req['cpu'], req['ram']))
+        placements.append((hop.node, vnf, need['cpu'], need['ram']))
         if hop.edges:
             paths.append(hop.edges)
         delay += hop.delay
         prev = hop.node
-    if dst is not None:
-        r = route(state, prev, dst, bw, weight)
-        if r is None:
-            return PlacementResult(False, bw=bw, reason='infeasible')
-        if r[0]:
-            state.reserve_path(r[0], bw)
-            paths.append(r[0])
-        delay += r[1]
+    r = route(state, prev, req.dst, bw)
+    if r is None:
+        return PlacementResult(False, bw=bw, reason='infeasible')
+    if r[0]:
+        state.reserve_path(r[0], bw)
+        paths.append(r[0])
+    delay += r[1]
     return PlacementResult(True, placements, paths, delay, bw)
 
 
