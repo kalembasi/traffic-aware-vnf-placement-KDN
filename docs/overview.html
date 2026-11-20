@@ -341,8 +341,13 @@ sonucu alıyor; yani sorun modelde değil, "her isteği tek tek en iyi yere koy"
 ağını bu bölgede işletmez, kapasite ekler.</li>
 <li><b>greedy her durumda açık ara en kötü.</b> Yola bakmadığı için trafik dolambaçlı yollardan gidiyor.</li>
 </ol>
-<p><b>Bedeli:</b> kdn-greedy karar başına 3–9 ms harcıyor, smart 0.4 ms'nin altında. Sunucu sayısı arttıkça bu süre de
-artar.</p>
+<p><b>Karar süresi önemli mi?</b> kdn-greedy karar başına 3–9 ms harcıyor, smart 0.4 ms'nin altında. Ama bu süre
+servis siparişi başına <b>bir kez</b> ödeniyor. VNF'i sunucuda fiilen ayağa kaldırmak (sanal makine ya da container
+başlatmak) genellikle saniyeler–dakikalar sürer, sipariş de saatlerce–aylarca yaşar. Kazanılan 3.4–4.6 ms ise
+servisin bütün ömrü boyunca <b>her pakete</b> yansıyan gecikme. Yani iki "ms" aynı şey değil: 9 ms'lik karar süresi
+pratikte önemsiz. Bu sayı ancak ölçeklenebilirlik göstergesi olarak anlamlı: kdn-greedy her VNF için bütün sunucuları
+modele soruyor, bu yüzden süre sunucu sayısıyla doğrusal artıyor. Ölçüm Python'da, tek bir bilgisayarda yapıldı;
+mutlak değeri değil, büyüklük sırasını gösteriyor.</p>
 
 <h3>Sağlamlık kontrolü: sonuç trafik verisine bağlı mı?</h3>
 <p>İki gerçek trafik verisini ayrı ayrı ve birlikte çıkarıp σ = 1 deneyini tekrarladık (30 tekrar). Mestres yükleri
