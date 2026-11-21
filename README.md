@@ -31,7 +31,7 @@ python3 -m venv .venv
 
 ## Reproducing everything
 ```bash
-./run_all.sh    # download data -> 6 environments -> hypothesis tests -> data ablation -> figures -> tests   (~30 min, 12 cores)
+./run_all.sh    # download data -> 6 environments -> hypothesis tests -> data ablation -> paper tables -> figures -> tests   (~30 min, 12 cores)
 ```
 The individual steps:
 ```bash
@@ -39,6 +39,8 @@ scripts/fetch_data.sh                          # public datasets into data/exter
 .venv/bin/python -m scripts.run run --name s05 # telemetry, training, alpha tuning, evaluation for one environment
 .venv/bin/python -m scripts.run analyze        # pre-registered hypothesis tests across environments
 .venv/bin/python -m scripts.ablation_data      # does the result depend on the KDN / Abilene traffic data? (~1 min)
+.venv/bin/python -m scripts.load_levels        # reserved CPU and acceptance at each arrival rate (smart)
+.venv/bin/python -m scripts.paper_tables       # numbers quoted in the paper -> results/paper_tables.md
 .venv/bin/python -m scripts.make_figures       # figures/
 .venv/bin/python -m pytest -q
 ```
@@ -59,6 +61,7 @@ scripts/          run.py (pipeline), ablation_data.py (data ablation), make_figu
 experiments/      protocol.md, environment configs (envs/), dataset checksums
 results/          findings.md, hypotheses.*, one folder per environment (runs, summaries, alpha tuning, model metrics)
 tests/            resource and load conservation, determinism, calibration, model policies
+manuscript/       seminar paper (IEEEtran LaTeX: main.tex, refs.bib); figures are read from figures/
 ```
 
 Environments: `s0`, `s025`, `s05`, `s1` (node-speed spread σ = 0, 0.25, 0.5, 1) and two sensitivity variants at

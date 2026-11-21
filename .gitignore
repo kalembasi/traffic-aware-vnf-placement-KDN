@@ -7,4 +7,14 @@ __pycache__/
 /models/
 rollout.md
 Knowledge-Defined Networking.md
-paper*
+/paper*
+
+# LaTeX build output
+manuscript/*.aux
+manuscript/*.log
+manuscript/*.bbl
+manuscript/*.blg
+manuscript/*.out
+manuscript/*.fls
+manuscript/*.fdb_latexmk
+manuscript/*.synctex.gz
