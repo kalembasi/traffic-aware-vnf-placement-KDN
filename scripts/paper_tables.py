@@ -33,7 +33,7 @@ def main():
     for env, sigma in ENVS.items():
         df = pd.read_csv(f'results/{env}/runs.csv')
         lat = df.pivot_table(index=['lambda', 'seed'], columns='algorithm', values='lat_mean').reset_index()
-        m = df.groupby(['algorithm', 'lambda'])[['lat_mean', 'acceptance', 'decision_ms']].mean()
+        m = df.groupby(['algorithm', 'lambda'])[['lat_mean', 'lat_p95', 'acceptance', 'decision_ms']].mean()
         lams = sorted(df['lambda'].unique())
         head = '| | ' + ' | '.join(f'λ={lam:g}' for lam in lams) + ' |'
         sep = '|---|' + '---|' * len(lams)
@@ -49,9 +49,13 @@ def main():
                            ('kdn-greedy − oracle-greedy (won = kdn-greedy slower)', 'kdn-greedy', 'oracle-greedy')]:
             cells = [f'{mu:+.2f} ± {h:.2f} ({w}/{n})' for _, mu, h, w, n in paired(lat, a, b)]
             lines.append(f'| {name} | ' + ' | '.join(cells) + ' |')
-        rel = [(m.loc[('smart', lam), 'lat_mean'] - m.loc[('kdn-greedy', lam), 'lat_mean'])
-               / m.loc[('smart', lam), 'lat_mean'] * 100 for lam in lams]
-        lines += ['| relative gain over smart (%) | ' + ' | '.join(f'{x:.1f}' for x in rel) + ' |', '']
+        for base in ['smart', 'greedy']:
+            rel = [(m.loc[(base, lam), 'lat_mean'] - m.loc[('kdn-greedy', lam), 'lat_mean'])
+                   / m.loc[(base, lam), 'lat_mean'] * 100 for lam in lams]
+            lines.append(f'| relative gain over {base} (%) | ' + ' | '.join(f'{x:.1f}' for x in rel) + ' |')
+        p95 = [(m.loc[('smart', lam), 'lat_p95'] - m.loc[('kdn-greedy', lam), 'lat_p95'])
+               / m.loc[('smart', lam), 'lat_p95'] * 100 for lam in lams]
+        lines += ['| relative p95 gain over smart (%) | ' + ' | '.join(f'{x:.1f}' for x in p95) + ' |', '']
     with open(OUT, 'w') as f:
         f.write('\n'.join(lines) + '\n')
     print('\n'.join(lines))

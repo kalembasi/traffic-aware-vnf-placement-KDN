@@ -18,6 +18,8 @@ Paired gain (ms, mean ± 95% CI half-width, seeds won of 30)
 | greedy − kdn-greedy | +12.09 ± 0.33 (30/30) | +15.24 ± 0.33 (30/30) | +14.64 ± 0.35 (30/30) | +13.60 ± 0.31 (30/30) | +12.47 ± 0.31 (30/30) |
 | kdn-greedy − oracle-greedy (won = kdn-greedy slower) | +0.01 ± 0.02 (13/30) | +0.02 ± 0.10 (14/30) | -0.12 ± 0.22 (11/30) | -0.01 ± 0.23 (14/30) | -0.16 ± 0.19 (13/30) |
 | relative gain over smart (%) | 4.1 | 2.9 | 1.7 | 0.8 | 0.7 |
+| relative gain over greedy (%) | 40.7 | 42.2 | 36.1 | 32.4 | 30.8 |
+| relative p95 gain over smart (%) | 3.0 | 3.1 | 1.2 | 0.9 | 0.6 |
 
 ## σ = 1
 
@@ -37,4 +39,6 @@ Paired gain (ms, mean ± 95% CI half-width, seeds won of 30)
 | greedy − kdn-greedy | +16.47 ± 0.69 (30/30) | +19.54 ± 0.62 (30/30) | +14.36 ± 0.56 (30/30) | +12.22 ± 0.35 (30/30) | +11.60 ± 0.30 (30/30) |
 | kdn-greedy − oracle-greedy (won = kdn-greedy slower) | +0.00 ± 0.07 (12/30) | +0.03 ± 0.17 (15/30) | -0.06 ± 0.25 (15/30) | +0.22 ± 0.26 (16/30) | -0.12 ± 0.22 (11/30) |
 | relative gain over smart (%) | 21.6 | 13.1 | 1.5 | -3.0 | -2.2 |
+| relative gain over greedy (%) | 49.5 | 46.7 | 32.1 | 26.7 | 26.7 |
+| relative p95 gain over smart (%) | 29.3 | 21.7 | 0.7 | -6.4 | -4.3 |
 

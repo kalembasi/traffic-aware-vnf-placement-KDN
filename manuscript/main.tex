@@ -33,12 +33,13 @@ traffic matrices, and per-request VNF loads come from the public KDN VNF measure
 grows with server load, and some servers are secretly slower than others. An XGBoost regressor trained on 170\,559
 simulated per-VNF telemetry rows predicts processing delay with $R^2 = 0.997$. A greedy placement method,
 \emph{kdn-greedy}, uses these predictions to put each VNF on the server with the lowest predicted path plus
-processing delay. Over 30 paired runs, kdn-greedy lowers the mean end-to-end latency of accepted SFCs compared with a
-shortest-path heuristic by 4.6 and 3.4\,ms (22\% and 13\%) at normal load when server speeds differ, and by
-0.6--0.8\,ms when they do not. Near capacity, where more than half of the requests are rejected, it is up to
-1.0\,ms slower. This loss comes from optimising each request on its own, not from prediction error. Replacing the
-real traffic data with synthetic inputs changes the gain by at most 0.6\,ms, so the result is driven by the hidden
-speed differences between servers, which are an assumption of this study.
+processing delay. Over 30 paired runs at normal load, kdn-greedy reduces the mean end-to-end latency of accepted SFCs, i.e., the
+one-way delay of their packets through the chain, by 22\% and 13\% compared with a shortest-path heuristic when
+server speeds differ (from 21.5 to 16.8\,ms and from 25.7 to 22.3\,ms), and by 3--4\% when they do not. Near
+capacity, where more than half of the requests are rejected, it is up to 3\% slower. This loss comes from optimising
+each request on its own, not from prediction error. Replacing the real traffic data with synthetic inputs changes
+the gain by at most 0.6\,ms, small next to the 4.6\,ms gain, so the result is driven by the hidden speed
+differences between servers, which are an assumption of this study.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -179,7 +180,8 @@ the mean sojourn time of an M/M/1 queue~\cite{kleinrock1975queueing}. Here $s_v$
 VNF (from 0.3\,ms for the traffic monitor to 5\,ms for the video transcoder), $\rho_n$ is the actual load of the
 server divided by its capacity, measured after the new SFC is placed, and $\kappa_n$ is a hidden speed factor of
 the server. The end-to-end latency of an SFC is the propagation delay of the path ingress$\to$VNF$_1\to\dots\to$
-VNF$_k\to$egress plus the sum of the processing delays.
+VNF$_k\to$egress plus the sum of the processing delays. It is the one-way delay that every packet of the service
+experiences, and it does not depend on how long the service lives.
 
 The speed factors are our assumption, motivated by hardware heterogeneity in real data
 centres~\cite{reiss2012heterogeneity,delimitrou2013paragon}. We set $\kappa_n = \exp(\sigma z_{\pi(n)})$, where $z_i$
@@ -265,8 +267,8 @@ $\lambda$ & CPU reserved & Full servers$^a$ & Accepted & Regime \\
 
 \subsection{Prediction quality}
 On the validation rows, the model predicts the per-VNF processing delay with $R^2 = 0.997$ and a mean absolute
-error of 0.17\,ms at $\sigma = 1$, where the mean delay is 3.2\,ms. At $\sigma = 0$ the values are $R^2 = 0.999$
-and 0.035\,ms. % results/s1/training_metrics.json, results/s0/training_metrics.json
+error of 0.17\,ms at $\sigma = 1$, about 5\% of the mean delay of 3.2\,ms. At $\sigma = 0$ the values are
+$R^2 = 0.999$ and 0.035\,ms (under 2\%). % results/s1/training_metrics.json, results/s0/training_metrics.json
 These numbers are high because the target is a noise-free function of observable quantities and the node
 identity; the model essentially recovers~\eqref{eq:delay} together with the hidden $\kappa_n$ and the average
 load factor. They should not be read as the accuracy one would get on real telemetry. The more relevant question is
@@ -285,7 +287,8 @@ leftmost points are the normal-load regime of Table~\ref{tab:load}.}
 \end{figure*}
 
 \begin{table*}[t]
-\caption{Mean latency of accepted SFCs (ms) and paired gain of kdn-greedy over smart (30 seeds)}
+\caption{Mean latency of accepted SFCs (ms) and gain of kdn-greedy over smart (30 seeds; ms gains are paired
+means with 95\% intervals)}
 \label{tab:results}
 \centering
 \footnotesize
@@ -297,35 +300,39 @@ Scenario & Method & $\lambda = 0.02$ & 0.05 & 0.1 & 0.2 & 0.4 \\
 $\sigma = 0$ (equal servers) & greedy & 29.68 & 36.15 & 40.52 & 42.03 & 40.51 \\
  & smart & 18.33 & 21.53 & 26.33 & 28.67 & 28.24 \\
  & kdn-greedy & \textbf{17.59} & \textbf{20.91} & \textbf{25.89} & \textbf{28.43} & \textbf{28.04} \\
- & gain over smart & $+0.75 \pm 0.09$ & $+0.62 \pm 0.12$ & $+0.45 \pm 0.22$ & $+0.24 \pm 0.20$ & $+0.20 \pm 0.22$ \\
+ & gain over smart (\%) & $+4.1$ & $+2.9$ & $+1.7$ & $+0.8$ & $+0.7$ \\
+ & gain over smart (ms) & $+0.75 \pm 0.09$ & $+0.62 \pm 0.12$ & $+0.45 \pm 0.22$ & $+0.24 \pm 0.20$ & $+0.20 \pm 0.22$ \\
 \midrule
 $\sigma = 1$ (heterogeneous) & greedy & 33.29 & 41.83 & 44.71 & 45.72 & 43.36 \\
  & smart & 21.45 & 25.65 & 30.82 & \textbf{32.52} & \textbf{31.07} \\
  & kdn-greedy & \textbf{16.82} & \textbf{22.28} & \textbf{30.35} & 33.50 & 31.76 \\
- & gain over smart & $+4.63 \pm 0.36$ & $+3.36 \pm 0.45$ & $+0.47 \pm 0.33$ & $-0.98 \pm 0.26$ & $-0.70 \pm 0.28$ \\
+ & gain over smart (\%) & $\mathbf{+21.6}$ & $\mathbf{+13.1}$ & $+1.5$ & $-3.0$ & $-2.2$ \\
+ & gain over smart (ms) & $+4.63 \pm 0.36$ & $+3.36 \pm 0.45$ & $+0.47 \pm 0.33$ & $-0.98 \pm 0.26$ & $-0.70 \pm 0.28$ \\
  & seeds won (of 30) & 30 & 30 & 21 & 2 & 6 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
 \emph{Normal load: the model helps, and more when servers differ.} At $\lambda = 0.02$ and 0.05 with $\sigma = 1$,
-kdn-greedy is $4.63 \pm 0.36$\,ms and $3.36 \pm 0.45$\,ms faster than smart, a relative reduction of 21.6\% and
-13.1\%, and it is faster in all 30 seeds at both levels. The 95th-percentile latency at $\lambda = 0.02$ drops from
-41.9 to 29.7\,ms. With equal servers ($\sigma = 0$) the gain is small but consistent, 0.75 and 0.62\,ms (29 of 30
-seeds). It comes from the load information in the model: kdn-greedy avoids loaded servers, while smart looks only at
+kdn-greedy lowers the mean latency by 21.6\% and 13.1\% compared with smart: from 21.45 to 16.82\,ms and from
+25.65 to 22.28\,ms (paired gains $4.63 \pm 0.36$ and $3.36 \pm 0.45$\,ms). It is faster in all 30 seeds at both
+levels. The slowest requests gain even more: the 95th-percentile latency at $\lambda = 0.02$ drops by 29\%, from
+41.9 to 29.7\,ms. With equal servers ($\sigma = 0$) the gain is small but consistent, 4.1\% and 2.9\% (0.75 and
+0.62\,ms; 29 of 30 seeds). It comes from the load information in the model: kdn-greedy avoids loaded servers, while smart looks only at
 the path. In short, most of the gain comes from finding the hidden slow servers, and the gain grows with how much the
 servers differ.
 
-\emph{Near capacity: the gain disappears.} At $\lambda = 0.1$ the gain drops to about 0.5\,ms in both scenarios. At
-$\lambda \ge 0.2$ and $\sigma = 1$, kdn-greedy is 0.7--1.0\,ms slower than smart and loses in most seeds. The cause
+\emph{Near capacity: the gain disappears.} At $\lambda = 0.1$ the gain drops below 2\% (about 0.5\,ms) in both
+scenarios. At $\lambda \ge 0.2$ and $\sigma = 1$, kdn-greedy is 2--3\% (0.7--1.0\,ms) slower than smart and loses
+in most seeds. The cause
 is not prediction error: kdn-greedy is within 0.22\,ms of oracle-greedy in every cell, and in every cell the 95\%
 interval of this difference contains zero. The cause is the search itself. kdn-greedy puts every
 request on the fastest servers available at that moment; when these fill up, later requests have to use slower or
 more distant servers. smart spreads requests along shortest paths and does not create this effect. An oracle that
 knows the true delays makes the same mistake, so a better model would not fix it.
 
-\emph{greedy is the worst everywhere.} It ignores paths and sends traffic on long detours: kdn-greedy is
-11.6--19.5\,ms faster than greedy in every cell and every seed. greedy also rejects more requests at medium load
+\emph{greedy is the worst everywhere.} It ignores paths and sends traffic on long detours: the latency of kdn-greedy is
+27--50\% lower than that of greedy (11.6--19.5\,ms) in every cell and every seed. greedy also rejects more requests at medium load
 (88.4\% accepted at $\lambda = 0.05$ against 96.6\% for smart).
 
 \emph{Acceptance.} smart and kdn-greedy accept almost the same share of requests at every load (within 1.1
@@ -363,7 +370,7 @@ Neither & 4.85 & 3.15 & $-0.18$ & $-1.04$ & $-0.69$ \\
 \end{table}
 
 Removing the KDN loads changes the gain by at most 0.19\,ms; removing the matrices as well changes it by at most
-0.58\,ms. At normal load and at overload the sign of the result is the same in every row; only at $\lambda = 0.1$,
+0.58\,ms. Both are small next to the gain itself (4.63\,ms at $\lambda = 0.02$). At normal load and at overload the sign of the result is the same in every row; only at $\lambda = 0.1$,
 where the gain is small anyway, does it change sign. The gain is therefore
 determined by the hidden server speeds and the distances in the topology, not by the traffic data. The real data
 makes the request stream realistic, but it does not carry the result.
@@ -372,8 +379,8 @@ makes the request stream realistic, but it does not carry the result.
 \section{Conclusion (Future Work)}
 We tested the central KDN idea, learning network behaviour from telemetry and using it for decisions, on VNF
 placement in a controlled simulation of the Abilene backbone. A learned per-VNF delay model combined with a simple
-greedy search finds hidden slow servers and lowers the mean SFC latency by 3.4--4.6\,ms (13--22\%) compared with a
-shortest-path heuristic at normal operating load. The gain shrinks to 0.6--0.8\,ms when all servers are equally
+greedy search finds hidden slow servers and lowers the mean SFC latency by 13--22\% (3.4--4.6\,ms) compared with a
+shortest-path heuristic at normal operating load. The gain shrinks to 3--4\% when all servers are equally
 fast, and it disappears near capacity, where placing every request on the currently best servers hurts later
 requests. The answer to our question is therefore: a learned latency model helps when there is hidden, learnable
 variation between servers and the network has headroom.
@@ -392,14 +399,14 @@ measurements. Latencies are computed by the simulator from~\eqref{eq:delay}, and
 by us. The study therefore does not show that machine learning lowers latency in a real network. It shows that if
 there is a hidden but learnable difference between servers, a model trained on telemetry can find it and use it, and
 it measures how large the benefit is under different loads. The size of the gain depends directly on this assumption:
-0.6--0.8\,ms without heterogeneity, 3.4--4.6\,ms with strong heterogeneity.
+3--4\% without heterogeneity, 13--22\% with strong heterogeneity.
 
 \emph{Why the prediction is so accurate.} An $R^2$ of 0.997 is a property of the simulator, not of the model:
 the target has no noise. Real telemetry would add measurement noise, interference between co-located VNFs and
 effects that no feature captures. Both the prediction accuracy and the placement gain would likely be lower.
 
 \emph{The role of the real data.} The ablation shows that the real traffic matrices and VNF measurements change the
-result by less than 0.6\,ms. The packet counts in the KDN dataset are similar to each other, so the load factor $r$
+gain by less than 0.6\,ms, against a gain of up to 4.6\,ms. The packet counts in the KDN dataset are similar to each other, so the load factor $r$
 varies by only about $\pm$10\%. We keep the data because it gives the simulator a realistic request stream and a
 measured relation between traffic and CPU load, but the paper should not be read as a result about these datasets.
 
