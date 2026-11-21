@@ -15,31 +15,26 @@
 
 \title{When Does a Learned Latency Model Help\\VNF Placement? A Knowledge-Defined\\Networking Study}
 
-\author{\IEEEauthorblockN{\"Omer Malik Kalemba\c{s}\i}
+\author{\IEEEauthorblockN{Malik Kalemba\c{s}\i}
 \IEEEauthorblockA{\textit{Informatics Institute} \\
 \textit{Istanbul Technical University}\\
 Istanbul, T\"urkiye \\
-kalembasi@itu.edu.tr}}
+kalembasi18@itu.edu.tr}}
 
 \maketitle
 
 % ---------------------------------------------------------------------------------------------------------------
 \begin{abstract}
-To place the virtual network functions (VNFs) of a service function chain (SFC), an orchestrator needs to know how
-long each VNF will take on each server, but this is usually not observable before the placement is made.
-Knowledge-Defined Networking (KDN) proposes to learn such behaviour from network telemetry. We test this idea in a
-trace-driven simulation of the 12-node Abilene backbone. Request arrivals and endpoints follow the 2004 Abilene
-traffic matrices, and per-request VNF loads come from the public KDN VNF measurement dataset. VNF processing delay
-grows with server load, and some servers are secretly slower than others. An XGBoost regressor trained on 170\,559
-simulated per-VNF telemetry rows predicts processing delay with $R^2 = 0.997$. A greedy placement method,
-\emph{kdn-greedy}, uses these predictions to put each VNF on the server with the lowest predicted path plus
-processing delay. Over 30 paired runs at normal load, kdn-greedy reduces the mean end-to-end latency of accepted SFCs, i.e., the
-one-way delay of their packets through the chain, by 22\% and 13\% compared with a shortest-path heuristic when
-server speeds differ (from 21.5 to 16.8\,ms and from 25.7 to 22.3\,ms), and by 3--4\% when they do not. Near
-capacity, where more than half of the requests are rejected, it is up to 3\% slower. This loss comes from optimising
-each request on its own, not from prediction error. Replacing the real traffic data with synthetic inputs changes
-the gain by at most 0.6\,ms, small next to the 4.6\,ms gain, so the result is driven by the hidden speed
-differences between servers, which are an assumption of this study.
+Placing the virtual network functions (VNFs) of a service function chain (SFC) well requires knowing how long each
+VNF will take on each server, which an orchestrator usually cannot observe in advance. Knowledge-Defined Networking
+(KDN) proposes to learn such behaviour from network telemetry. We test this idea in a trace-driven simulation of the
+Abilene backbone, driven by real traffic matrices and VNF measurements, in which some servers are secretly slower
+than others. An XGBoost model trained on simulated per-VNF telemetry predicts processing delay, and a greedy method,
+kdn-greedy, places each VNF where the predicted path plus processing delay is lowest. At normal load, kdn-greedy
+lowers the mean end-to-end latency by up to 22\% compared with a shortest-path heuristic. The gain shrinks to a few
+percent when all servers are equally fast and disappears near capacity, where optimising each request on its own
+hurts later requests. The gain comes from the hidden speed differences, an assumption of this study, rather than
+from the real traffic data.
 \end{abstract}
 
 \begin{IEEEkeywords}
