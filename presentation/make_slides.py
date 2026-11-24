@@ -23,8 +23,8 @@ from src.experiment import world_for
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.join(HERE, 'build')
-BG, INK, ACC, AUX = '#F3EEE4', '#1C1B19', '#D4452B', '#8A8578'
-SERIF, SANS = 'Fraunces 72pt', 'IBM Plex Sans'
+BG, INK, ACC, AUX = '#F9F9F6', '#111111', '#1F4E3D', '#7D807B'    # off-white, black, dark green, grey
+SERIF, SANS = 'Source Serif 4 Semibold', 'Inter'
 W, H = 13.333, 7.5
 LM = 0.85                                   # left margin (in)
 
@@ -268,6 +268,23 @@ def chart_results(path):
     plt.close(fig)
 
 
+def chart_queue(path):
+    rho = np.linspace(0, 0.95, 200)
+    fig, ax = plt.subplots(figsize=(5.1, 3.9))
+    ax.plot(rho * 100, 1 / (1 - rho), color=ACC, lw=2.8, solid_capstyle='round')
+    for r, lab in ((0.5, '×2'), (0.9, '×10')):
+        ax.scatter([r * 100], [1 / (1 - r)], s=45, color=INK, zorder=4, edgecolor=BG, linewidth=1.5)
+        ax.annotate(lab, (r * 100, 1 / (1 - r)), xytext=(-12, 8), textcoords='offset points', ha='right',
+                    fontsize=14, fontweight='bold', color=INK)
+    ax.set_xlabel('server load ρ (%)', fontsize=12)
+    ax.set_ylabel('delay / base service time', fontsize=12)
+    ax.set_xlim(0, 100); ax.set_ylim(0, 21)
+    ax.grid(axis='y', color=mix(AUX, 0.3), lw=0.6); ax.set_axisbelow(True)
+    fig.tight_layout()
+    fig.savefig(path, dpi=250)
+    plt.close(fig)
+
+
 # ------------------------------------------------------------------------------------------------------ slides
 N_MAIN = 18
 D = Deck(N_MAIN)
@@ -377,8 +394,8 @@ Trace-driven simulation of Abilene, a US research backbone, SNDlib version: 12 n
 Link delay = great-circle distance x 5 microseconds per km. Labels are ms.
 Each node hosts one server with 100 CPU and 100 RAM units. Link capacities are scaled down so chains can fill them.
 Three services: Web (NAT-Firewall-Monitor), VoIP (NAT-SBC-Firewall-IDS), Video (NAT-DPI-Transcoder).""")
-draw_network(s, (LM + 0.2, 1.95, 8.0, 4.4), edge_color=AUX, edge_w=1.25, node_r=0.085, delays=True)
-text(s, 10.45, 2.4, 2.3, 3.2, [[('12', {'font': SERIF, 'size': 40})], 'nodes, one server each',
+draw_network(s, (LM + 0.2, 1.95, 7.4, 4.4), edge_color=AUX, edge_w=1.25, node_r=0.085, delays=True)
+text(s, 9.85, 2.4, 2.7, 3.2, [[('12', {'font': SERIF, 'size': 40})], 'nodes, one server each',
                               [('15', {'font': SERIF, 'size': 40})], 'links, delay in ms'],
      size=15, color=INK, spacing=1.05, after=6)
 
@@ -433,26 +450,49 @@ text(s, 9.2, 4.45, 3.4, 1.4, [[('R² = 0.997', {'font': SERIF, 'size': 30})],
      size=14, spacing=1.15)
 
 # 9 -------------------------------------------------------------------------------------------------- methods
-s = D.slide('Placement', 'Three ways to place a chain', notes="""
+s = D.slide('Placement', 'Three ways to place a VNF', notes="""
+Same request, same network, three methods. The middle server lies on the shortest path but is secretly slow.
+greedy: takes the first server in a fixed list that has room. Knows only capacities -> often a long detour.
+smart: takes the server with the shortest path from the previous hop. Knows the topology, nothing about processing
+-> short path, but it may land on the slow server.
+kdn-greedy (ours): tries every server with room (at most 12) and scores it: path delay + processing delay predicted
+by the model. Lowest score wins -> accepts a small detour to reach a fast server.
 All methods place VNFs one by one in chain order and never backtrack; if nothing fits, the request is rejected.
-greedy: first server that fits, in a fixed order. Knows only capacities.
-smart: server with the shortest path from the previous hop. Knows the topology, nothing about processing.
-kdn-greedy (ours): tries every feasible server (at most 12) and scores it with path delay + predicted processing
-delay (also re-scoring earlier VNFs, because co-locating raises load). Lowest score wins.
-oracle-greedy: same search with the true delay. Best kdn-greedy could do with a perfect model; not a global optimum.""")
-rows = [('greedy', 'first server that fits', INK, False),
-        ('smart', 'shortest path', INK, False),
-        ('kdn-greedy', 'shortest path + predicted delay', ACC, True),
-        ('oracle-greedy', 'same search, true delay  (reference)', AUX, False)]
-y = 2.25
-for k, (a, b, col, hot) in enumerate(rows):
+oracle-greedy: the same search with the true delay. The best kdn-greedy could do with a perfect model.""")
+gap = 0.5
+pw = (W - 2 * LM - 2 * gap) / 3
+methods = [('greedy', 'knows: capacities', 'long detour', AUX, 'A', 'sysDash'),
+           ('smart', 'knows: topology', 'short path, slow server', INK, 'B', None),
+           ('kdn-greedy', 'knows: topology + learned delay', 'small detour, fast server', ACC, 'C', None)]
+for k, (name, knows, result, col, pick, dash) in enumerate(methods):
+    px, py = LM + k * (pw + gap), 2.05
+    P = {'in': (px + 0.2, py + 1.15), 'out': (px + pw - 0.2, py + 1.15), 'A': (px + 0.85, py + 0.1),
+         'D': (px + pw - 0.85, py + 0.25), 'B': (px + pw / 2, py + 1.15), 'C': (px + pw / 2 + 0.1, py + 1.95)}
+    edges = [('in', 'A'), ('A', 'D'), ('D', 'out'), ('in', 'B'), ('B', 'out'), ('in', 'C'), ('C', 'out')]
+    route = {'A': [('in', 'A'), ('A', 'D'), ('D', 'out')], 'B': [('in', 'B'), ('B', 'out')],
+             'C': [('in', 'C'), ('C', 'out')]}[pick]
+    for u, v in edges:
+        line(s, *P[u], *P[v], color=mix(AUX, 0.45), w=0.75)
+    for u, v in route:
+        line(s, *P[u], *P[v], color=col, w=3, dash=dash)
+    for n in ('A', 'B', 'C', 'D'):
+        chosen = n == pick
+        if n == 'B':      # the secretly slow server: thick ring
+            dot(s, *P[n], 0.2, fill=col if chosen else BG, outline=INK if not chosen else col, ow=2.5)
+            text(s, P[n][0] - 0.6, P[n][1] - 0.52, 1.2, 0.3, 'slow', size=11, bold=True, color=AUX, align='c')
+        else:
+            dot(s, *P[n], 0.15 if chosen else 0.1, fill=col if chosen else AUX)
+    for n, lab in (('in', 'in'), ('out', 'out')):
+        dot(s, *P[n], 0.07, fill=BG, outline=INK, ow=1.25)
+        text(s, P[n][0] - 0.5, P[n][1] + 0.12, 1.0, 0.3, lab, size=11, color=AUX, align='c')
+    ty = 4.55
+    text(s, px, ty, pw, 0.5, name, size=26, font=SERIF, color=col)
+    text(s, px, ty + 0.62, pw, 0.35, knows, size=13, color=AUX)
+    text(s, px, ty + 1.0, pw, 0.4, result, size=16, bold=True, color=col if col != AUX else INK)
+    if name == 'kdn-greedy':
+        text(s, px + pw - 1.0, ty + 0.12, 1.0, 0.3, 'OURS', size=10.5, bold=True, color=ACC, align='r', tracking=2)
     if k:
-        line(s, LM, y - 0.22, W - LM, y - 0.22, color=mix(AUX, 0.45), w=0.5)
-    text(s, LM, y, 4.2, 0.6, a, size=28, font=SERIF, color=col)
-    text(s, 5.3, y + 0.08, 7.2, 0.5, b, size=20, color=col if col != INK else INK, bold=hot)
-    if hot:
-        text(s, W - LM - 1.5, y + 0.12, 1.5, 0.4, 'ours', size=11, bold=True, color=ACC, align='r', tracking=2)
-    y += 1.05
+        line(s, px - gap / 2, 2.0, px - gap / 2, 6.0, color=mix(AUX, 0.4), w=0.5)
 
 # 10 ------------------------------------------------------------------------------------------------- load
 s = D.slide('Experiment', 'Normal load vs overload', notes="""
@@ -536,66 +576,74 @@ text(s, gx, yl + 0.5, 5 * cw + 4 * gap, 0.3, 'Change in mean latency, kdn-greedy
      size=12, color=AUX, align='c')
 
 # 14 ------------------------------------------------------------------------------------------------------ why
-s = D.slide('Near capacity', 'Greedy choices backfire', notes="""
-Why does the gain disappear near capacity? Not prediction error: kdn-greedy is within 0.22 ms of oracle-greedy
-in every cell, and the oracle knows the true delays.
-The cause is the search: each request is optimised alone and takes the fastest servers available right now.
-When those fill up, later requests are pushed to slow or distant servers. smart spreads requests along shortest
-paths and does not create this effect. A better model would not fix it; the placement must think about future requests.""")
-fy0 = 2.35
-sx = np.linspace(LM + 2.4, 8.4, 12)
-for i, (lab, taken) in enumerate([('early request', 3), ('later request', 9)]):
-    y = fy0 + i * 1.25
-    text(s, LM, y - 0.17, 2.0, 0.35, lab, size=15, color=INK, bold=True, align='r')
-    line(s, sx[0], y, sx[-1], y, color=mix(AUX, 0.4), w=0.5)
-    for j, x in enumerate(sx):
-        if j < taken:
-            dot(s, x, y, 0.13, fill=INK)
-        elif j == taken:
-            dot(s, x, y, 0.13, fill=ACC)
-        else:
-            dot(s, x, y, 0.13, fill=BG, outline=AUX)
-yax = fy0 + 2.05
-text(s, sx[0] - 0.1, yax, 3, 0.3, '← fast servers', size=12, color=AUX)
-text(s, sx[-1] - 2.9, yax, 3, 0.3, 'slow servers →', size=12, color=AUX, align='r')
-dot(s, sx[0] + 0.05, yax + 0.75, 0.08, fill=INK)
-text(s, sx[0] + 0.25, yax + 0.6, 1.5, 0.3, 'full', size=12, color=AUX)
-dot(s, sx[0] + 1.35, yax + 0.75, 0.08, fill=ACC)
-text(s, sx[0] + 1.55, yax + 0.6, 1.5, 0.3, 'chosen', size=12, color=AUX)
-line(s, 9.15, 2.1, 9.15, 5.7, color=mix(AUX, 0.6), w=0.75)
-text(s, 9.6, 2.15, 3.0, 3.6, [[('Not a model error.', {'bold': True})],
-                              [('An oracle that knows the true delays fails the same way.', {'color': AUX})],
+s = D.slide('Why the gain disappears', 'Near capacity, the fast servers are already full', title_size=34, notes="""
+Why does the gain disappear when the network is nearly full?
+Light load (left): the fast servers still have room, so kdn-greedy can send the new request there. This is the gain.
+Heavy load (right): every earlier request also chose the fastest servers, so they are full.
+The new request has to go to a slow or distant server.
+kdn-greedy optimises each request on its own and does not keep the fast servers free for later requests.
+smart spreads requests along shortest paths, so it does not fill the fast servers first.
+This is not a model error: oracle-greedy, which knows the true delays, behaves the same way;
+kdn-greedy is within 0.22 ms of it in every cell. A better model would not fix this;
+the placement would have to plan for future requests (future work).""")
+panels = [('Light load', [0.35, 0.25, 0.4, 0.3, 0.2, 0.15], 0, 'a fast server still has room'),
+          ('Heavy load', [1.0, 1.0, 1.0, 1.0, 0.55, 0.45], 4, 'fast servers full: goes to a slow one')]
+bw, bh, bgap = 0.42, 2.0, 0.2
+for k, (lab, used, pick, cap) in enumerate(panels):
+    px, by = LM + k * 4.35, 2.55
+    text(s, px, 2.0, 4, 0.4, lab, size=17, bold=True)
+    for j, u in enumerate(used):
+        x = px + j * (bw + bgap)
+        rrect(s, x, by, bw, bh, mix(AUX, 0.15), radius=0.08)
+        if u > 0:
+            rrect(s, x, by + bh * (1 - u), bw, bh * u, mix(INK, 0.8), radius=0.08)
+        if j == pick:
+            nh = 0.3
+            rrect(s, x, by + bh * (1 - u) - nh - 0.04, bw, nh, ACC, radius=0.08)
+    x0b, x1b = px, px + 6 * bw + 5 * bgap
+    text(s, x0b, by + bh + 0.1, x1b - x0b, 0.3, 'fast  →  slow servers', size=12, color=AUX, align='c')
+    text(s, x0b, by + bh + 0.5, x1b - x0b + 0.3, 0.6, cap, size=14, color=ACC if k == 0 else INK, bold=True)
+# legend
+lx, ly = LM, 6.0
+rrect(s, lx, ly, 0.25, 0.18, mix(INK, 0.8), radius=0.05)
+text(s, lx + 0.35, ly - 0.04, 2.5, 0.3, 'used by earlier requests', size=12, color=AUX)
+rrect(s, lx + 2.9, ly, 0.25, 0.18, ACC, radius=0.05)
+text(s, lx + 3.25, ly - 0.04, 2.0, 0.3, 'new request', size=12, color=AUX)
+line(s, 9.35, 2.05, 9.35, 5.9, color=mix(AUX, 0.5), w=0.75)
+text(s, 9.8, 2.05, 2.8, 3.8, [[('Not a model error.', {'bold': True})],
+                              [('An oracle that knows the true delays does the same.', {'color': AUX})],
                               [('≤ 0.22 ms', {'font': SERIF, 'size': 30, 'color': INK})],
-                              [('model vs oracle, every cell', {'color': AUX, 'size': 12})]],
+                              [('model vs oracle, in every cell', {'color': AUX, 'size': 12})]],
      size=17, spacing=1.15, after=12)
 
 # 15 ---------------------------------------------------------------------------------------------------- ablation
-s = D.slide('Ablation', [[('Remove the real traffic data: ', {}), ('the gain barely moves.', {'color': ACC})]],
+s = D.slide('Does it depend on the real data?', [[('Swap real data for synthetic: ', {}),
+                                                 ('the gain stays the same.', {'color': ACC})]],
             title_size=34, notes="""
-To check what the real data contributes, we removed it one source at a time (sigma = 1, oracle-greedy to avoid
-retraining; it matches kdn-greedy within 0.22 ms). No KDN loads: every VNF adds a fixed load.
-No Abilene matrices: constant arrival rate between uniformly random city pairs.
-The gain changes by at most 0.58 ms against a gain of 4.6 ms. Sign stays the same at normal load and overload.
-So the result is carried by the hidden server speeds and the topology, not by the traffic data.""")
-rows = [('Both (original)', 4.63, 3.39), ('No KDN loads', 4.46, 3.20), ('No Abilene matrices', 5.01, 3.31),
-        ('Neither', 4.85, 3.15)]
-ax0, ax1, vmax = LM + 3.4, W - LM - 0.6, 6.0
+Question: is the gain caused by the real datasets? Test: replace them with simple synthetic data and run again.
+Synthetic VNF loads: every VNF adds the same fixed load instead of the measured KDN CPU values.
+Synthetic traffic: requests arrive at a constant rate between random city pairs instead of following the Abilene matrices.
+Bars: latency gain over smart at normal load (lambda = 0.02, sigma = 1, 30 seeds).
+(Uses oracle-greedy so the model does not have to be retrained for each variant; it matches kdn-greedy within 0.22 ms.)
+All four bars are about 4.5-5 ms; the largest change at any load is 0.58 ms.
+So the gain comes from the hidden slow servers and the topology, not from the traffic data.
+The real data makes the request stream realistic, but it does not carry the result.""")
+rows = [('Real data (original)', 4.63), ('Synthetic VNF loads', 4.46), ('Synthetic traffic', 5.01),
+        ('Both synthetic', 4.85)]
+ax0, ax1, vmax = LM + 3.6, 10.6, 6.0
 X = lambda v: ax0 + (ax1 - ax0) * v / vmax
-for k, (lab, a, b) in enumerate(rows):
-    y = 2.6 + k * 0.78
-    text(s, LM, y - 0.18, 3.1, 0.35, lab, size=16, bold=k == 0, align='r')
-    line(s, ax0, y, ax1, y, color=mix(AUX, 0.35), w=0.5)
-    line(s, X(b), y, X(a), y, color=mix(AUX, 0.8), w=1.25)
-    dot(s, X(b), y, 0.09, fill=INK)
-    dot(s, X(a), y, 0.11, fill=ACC)
-ya = 2.6 + 4 * 0.78 - 0.2
+for k, (lab, v) in enumerate(rows):
+    y = 2.2 + k * 0.78
+    text(s, LM, y + 0.06, 3.35, 0.4, lab, size=16, bold=k == 0, align='r')
+    rrect(s, ax0, y, X(v) - ax0, 0.48, ACC if k == 0 else mix(INK, 0.55), radius=0.1)
+    text(s, X(v) + 0.15, y + 0.06, 1.4, 0.4, f'{v:.1f} ms', size=16, bold=True, color=ACC if k == 0 else INK)
+ya = 2.2 + 4 * 0.78 + 0.05
+line(s, ax0, ya - 0.08, ax1, ya - 0.08, color=mix(AUX, 0.5), w=0.5)
 for v in range(0, 7):
     text(s, X(v) - 0.3, ya, 0.6, 0.3, f'{v}', size=12, color=AUX, align='c')
-text(s, ax0, ya + 0.32, ax1 - ax0, 0.3, 'latency gain over smart (ms)', size=12, color=AUX, align='c')
-dot(s, ax0 + 0.1, 1.95 + 0.17, 0.09, fill=ACC)
-text(s, ax0 + 0.3, 1.95, 2.0, 0.35, 'λ = 0.02', size=13, color=INK)
-dot(s, ax0 + 1.6, 1.95 + 0.17, 0.08, fill=INK)
-text(s, ax0 + 1.8, 1.95, 2.0, 0.35, 'λ = 0.05', size=13, color=INK)
+text(s, ax0, ya + 0.32, ax1 - ax0, 0.3, 'latency gain over smart at normal load (ms)', size=12, color=AUX, align='c')
+text(s, LM, 6.3, 11, 0.4, [[('→ ', {'color': ACC}), ('The gain comes from the hidden slow servers, not from the data.',
+                                                       {})]], size=16, bold=True)
 
 # 16 ------------------------------------------------------------------------------------------------- limitations
 s = D.slide('Limitations', 'What this study does not show', notes="""
@@ -670,7 +718,34 @@ for k, (a, b, c) in enumerate(hist):
     text(s, LM + 1.7, y + 0.48, 10, 0.4, c, size=16, color=AUX)
     y += 1.5
 
-assert D.i == N_MAIN + 2
+# backup 3 ------------------------------------------------------------------------------------- queueing model
+qchart = os.path.join(BUILD, 'chart_queue.png')
+chart_queue(qchart)
+s = D.slide('Backup', 'Processing delay: an M/M/1 queue', notes="""
+If asked about queueing theory:
+The simulator computes each VNF's processing delay with the textbook M/M/1 formula (Kleinrock 1975):
+the mean time a job spends in a single-server queue. M/M/1 = random (Poisson) arrivals, random (exponential)
+service times, one server.
+delay = kappa * s / (1 - rho).  s = base service time of the VNF (0.3 ms traffic monitor ... 5 ms video transcoder).
+rho = how full the server is (actual load / capacity, measured after the new chain is placed), capped at 0.95 so the
+delay stays finite. kappa = hidden speed factor of the server.
+Intuition: an empty server serves immediately; at 50% load a job waits as long as it is served (x2);
+at 90% load x10. So delay explodes as a server fills up.
+Why this form: it is the standard, simplest queueing model; parameters are our choice.
+Important: the controller and the model do NOT know this formula. The model only sees measured delays and learns it.
+(The repository also contains a run with a different, linear delay form; it is not in the paper.)""")
+text(s, LM, 2.1, 6.5, 0.8, [[('delay = ', {}), ('κ', {'color': ACC}), (' · s / (1 − ρ)', {})]], size=36,
+     font=SANS)
+defs = [('s', 'base service time of the VNF (0.3–5 ms)'), ('ρ', 'how full the server is (capped at 0.95)'),
+        ('κ', 'hidden speed of the server')]
+for k, (a, b) in enumerate(defs):
+    y = 3.35 + k * 0.62
+    text(s, LM, y, 0.5, 0.4, a, size=20, bold=True, color=ACC if a == 'κ' else INK)
+    text(s, LM + 0.6, y + 0.03, 5.6, 0.4, b, size=16, color=AUX)
+text(s, LM, 5.4, 6.0, 0.6, 'The model never sees this formula; it learns it from measurements.', size=15, bold=True)
+s.shapes.add_picture(qchart, Inches(7.4), Inches(1.9), width=Inches(5.1))
+
+assert D.i == N_MAIN + 3
 out = os.path.join(HERE, 'slides.pptx')
 D.p.save(out)
 print('written', out)
