@@ -1,12 +1,20 @@
-# Where Does Learning Help? Knowledge-Defined Networking for Load-Aware VNF Placement
+# When Does a Learned Latency Model Help VNF Placement? A Knowledge-Defined Networking Study
 
 A trace-driven simulation study of SFC (service function chain) placement. A controller learns, from per-VNF
 telemetry, how long a VNF takes to process traffic on each node, and uses that model to place new SFCs. The study
-asks when this learned model helps compared with tuned heuristics and with analytical models that know the delay
-formula.
+asks when this learned model helps compared with simple heuristics, and under which load.
 
-The evaluation protocol was pre-registered before any data was generated: [`experiments/protocol.md`](experiments/protocol.md).
-The results are in [`results/findings.md`](results/findings.md).
+- **Paper** (seminar, IEEEtran): [`manuscript/main.pdf`](manuscript/main.pdf); every number in it comes from
+  [`results/paper_tables.md`](results/paper_tables.md), [`results/load_levels.md`](results/load_levels.md) and
+  [`results/ablation_data.md`](results/ablation_data.md).
+- **Slides** (15-min talk, speaker notes included): [`presentation/slides.pdf`](presentation/slides.pdf).
+- **Plain-language overview** (Turkish): [`docs/overview.html`](docs/overview.html).
+- **Pre-registered protocol and all results** (including variants not in the paper):
+  [`experiments/protocol.md`](experiments/protocol.md), [`results/findings.md`](results/findings.md).
+
+**Main result** (σ = 1, hidden slow servers): at normal load (λ = 0.02–0.05) `kdn-greedy` lowers the mean SFC
+latency by 13–22% compared with `smart`; with equal servers (σ = 0) by 3–4%. Near capacity the gain disappears,
+because optimising each request on its own fills the fast servers first; an oracle with the true delays behaves the same.
 
 ## Setup in one paragraph
 - **Network:** the 12-node SNDlib Abilene topology. Link delays come from geographic distance.
@@ -17,10 +25,13 @@ The results are in [`results/findings.md`](results/findings.md).
   spread σ of these hidden node speeds is the main experimental variable.
 - **Model:** an XGBoost regressor is trained on simulated per-VNF telemetry to predict the processing delay of a VNF
   on a node.
-- **Policies compared:**
-  - `kdn` lets the model choose among heuristic candidates.
-  - `kdn-greedy` lets the model place the VNFs itself.
-  - Baselines: tuned heuristics, formula-based models (`model-nom`, `model-cal`) and oracles that know the true delay.
+- **Policies in the paper:**
+  - `greedy`: each VNF on the first node (fixed order) with enough free CPU/RAM.
+  - `smart`: each VNF on the node with the shortest propagation delay from the previous hop.
+  - `kdn-greedy`: each VNF on the node with the lowest path delay + model-predicted processing delay.
+  - `oracle-greedy`: the same search with the true delay (reference).
+- **Further policies in the repository** (see `results/findings.md`): `kdn` (the model chooses among heuristic
+  candidates; the first, pre-registered design), tuned `smart-load`, formula-based `model-nom` / `model-cal`.
 
 ## Installation
 Tested with Python 3.14 on Linux.
@@ -46,6 +57,14 @@ scripts/fetch_data.sh                          # public datasets into data/exter
 ```
 Every run is seeded; the results are deterministic except the measured decision time (`decision_ms`).
 
+Paper and slides (after the steps above):
+```bash
+cd manuscript && latexmk -pdf main.tex         # needs texlive-publishers, texlive-latex-extra
+.venv/bin/python -m presentation.make_slides   # presentation/slides.pptx; fonts in presentation/fonts
+soffice --headless --convert-to pdf presentation/slides.pptx --outdir presentation
+```
+Install the fonts in `presentation/fonts` (Source Serif 4, Inter) before opening or converting the `.pptx`.
+
 ## Layout
 ```
 src/
@@ -57,11 +76,14 @@ src/
   policies.py     all placement policies (heuristics, candidate selectors, model-built placement, oracles)
   experiment.py   simulation grid, telemetry generation, model training and calibration
   analysis.py     summary tables and hypothesis tests
-scripts/          run.py (pipeline), ablation_data.py (data ablation), make_figures.py, fetch_data.sh
+scripts/          run.py (pipeline), ablation_data.py (data ablation), load_levels.py, paper_tables.py,
+                  make_figures.py, fetch_data.sh
 experiments/      protocol.md, environment configs (envs/), dataset checksums
 results/          findings.md, hypotheses.*, one folder per environment (runs, summaries, alpha tuning, model metrics)
 tests/            resource and load conservation, determinism, calibration, model policies
 manuscript/       seminar paper (IEEEtran LaTeX: main.tex, refs.bib); figures are read from figures/
+presentation/     seminar slides: make_slides.py -> slides.pptx / slides.pdf, fonts/
+docs/             overview.html (Turkish plain-language overview)
 ```
 
 Environments: `s0`, `s025`, `s05`, `s1` (node-speed spread σ = 0, 0.25, 0.5, 1) and two sensitivity variants at
